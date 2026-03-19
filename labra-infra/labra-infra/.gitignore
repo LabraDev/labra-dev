@@ -1,0 +1,27 @@
+#  keep Terraform working folders ignored so nobody commits local plugin/cache noise
+**/.terraform/*
+
+#  keep state files out of git because they can leak infra details and secrets
+*.tfstate
+*.tfstate.*
+
+#  ignore crash logs since they are local debug artifacts
+crash.log
+crash.*.log
+
+#  ignore tfvars by default so we do not leak local values
+*.tfvars
+*.tfvars.json
+
+#  still track the shared dev tfvars template for onboarding
+!env/dev/terraform.tfvars
+
+#  ignore local override files because they are machine specific
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+
+#  ignore local Terraform CLI config files
+.terraformrc
+terraform.rc
