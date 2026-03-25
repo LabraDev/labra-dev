@@ -2,7 +2,7 @@
     import github_logo from '$lib/assets/github-logo.svg';
 </script>
 
-<a href="http://localhost:8080/login" id="logintxt">
+<a href="http://localhost:8080/v1/login" id="logintxt">
     <img src={github_logo} alt="github logo" height="40" width="40" />
     ‎ Login with Github
 </a>
