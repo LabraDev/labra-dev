@@ -31,7 +31,7 @@ func LoginHandler(w http.ResponseWriter, r *http.Request) {
 		ClientSecret: gh_secret,
 		Scopes:       []string{"repo", "user"},
 		Endpoint:     github.Endpoint,
-		RedirectURL:  "http://localhost:8080/callback",
+		RedirectURL:  "http://localhost:8080/v1/callback",
 	}
 
 	// This protects against CSRF attacks

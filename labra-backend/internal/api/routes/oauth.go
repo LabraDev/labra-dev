@@ -7,6 +7,6 @@ import (
 )
 
 func Oauth(s *fuego.Server) {
-	fuego.PostStd(s, "/login", handlers.LoginHandler)
-	fuego.GetStd(s, "/callback", handlers.CallbackHandler)
+	fuego.GetStd(s, "/v1/login", handlers.LoginHandler)
+	fuego.GetStd(s, "/v1/callback", handlers.CallbackHandler)
 }
