@@ -1,13 +1,18 @@
 package main
 
 import (
+	"database/sql"
 	"fmt"
+	"log"
 	"os"
 
 	"labra-backend/internal/api/routes"
 	"labra-backend/internal/api/services"
 
 	"github.com/go-fuego/fuego"
+	"github.com/golang-migrate/migrate/v4"
+	"github.com/golang-migrate/migrate/v4/database/sqlite3"
+	_ "github.com/golang-migrate/migrate/v4/source/file"
 	"github.com/lpernett/godotenv"
 )
 
@@ -15,6 +20,8 @@ const (
 	PORT = "8080"
 	HOST = "localhost"
 )
+
+var db_url string
 
 func init() {
 	err := godotenv.Load("./../.env")
@@ -24,6 +31,7 @@ func init() {
 
 	gh_client := os.Getenv("GH_CLIENT_ID")
 	gh_secret := os.Getenv("GH_CLIENT_SECRET")
+	db_url = os.Getenv("DB_URL")
 
 	services.InitOauth(gh_client, gh_secret)
 }
@@ -35,6 +43,35 @@ func main() {
 		fuego.WithAddr(listenOn),
 	)
 
+	// -- setup db --
+
+	db, err := sql.Open("sqlite3", db_url)
+	if err != nil {
+		log.Fatalln(err)
+	}
+	defer db.Close()
+
+	driver, err := sqlite3.WithInstance(db, &sqlite3.Config{})
+	if err != nil {
+		log.Fatalln(err)
+	}
+
+	// maybe change this path later
+	m, err := migrate.NewWithDatabaseInstance(
+		"file://../sql/migrations",
+		"sqlite3",
+		driver,
+	)
+
+	if err != nil {
+		log.Fatalln(err)
+	}
+
+	if err := m.Up(); err != nil && err != migrate.ErrNoChange {
+		log.Fatalln(err)
+	}
+
+	fmt.Println("DB CONNECTED")
 	routes.HealthRoute(s)
 	routes.Oauth(s)
 

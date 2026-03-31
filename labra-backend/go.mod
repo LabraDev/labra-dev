@@ -4,12 +4,15 @@ go 1.25.2
 
 require golang.org/x/oauth2 v0.36.0
 
-require github.com/lpernett/godotenv v0.0.0-20230527005122-0de1d4c5ef5e
+require (
+	github.com/go-fuego/fuego v0.19.0
+	github.com/golang-migrate/migrate/v4 v4.19.1
+	github.com/lpernett/godotenv v0.0.0-20230527005122-0de1d4c5ef5e
+)
 
 require (
 	github.com/gabriel-vasile/mimetype v1.4.11 // indirect
 	github.com/getkin/kin-openapi v0.133.0 // indirect
-	github.com/go-fuego/fuego v0.19.0 // indirect
 	github.com/go-openapi/jsonpointer v0.22.3 // indirect
 	github.com/go-openapi/swag/jsonname v0.25.4 // indirect
 	github.com/go-playground/locales v0.14.1 // indirect
@@ -21,6 +24,7 @@ require (
 	github.com/josharian/intern v1.0.0 // indirect
 	github.com/leodido/go-urn v1.4.0 // indirect
 	github.com/mailru/easyjson v0.9.1 // indirect
+	github.com/mattn/go-sqlite3 v1.14.22 // indirect
 	github.com/mohae/deepcopy v0.0.0-20170929034955-c48cc78d4826 // indirect
 	github.com/oasdiff/yaml v0.0.0-20250309154309-f31be36b4037 // indirect
 	github.com/oasdiff/yaml3 v0.0.0-20250309153720-d2182401db90 // indirect

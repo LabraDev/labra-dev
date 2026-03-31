@@ -78,6 +78,7 @@ func Callback(w http.ResponseWriter, r *http.Request) ([]byte, error) {
 	}
 
 	oauthState, _ := r.Cookie("oauthstate")
+	fmt.Println("OAUTH ->>>", oauthState)
 	if state != oauthState.Value {
 		return nil, fmt.Errorf("error: state does not match")
 	}
