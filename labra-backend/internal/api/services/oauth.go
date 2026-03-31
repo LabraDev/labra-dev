@@ -2,10 +2,9 @@ package services
 
 import (
 	"context"
-	"crypto/rand"
-	"encoding/base64"
 	"fmt"
 	"io"
+	"labra-backend/utils"
 	"net/http"
 	"time"
 
@@ -15,8 +14,12 @@ import (
 
 var oauthConfig = &oauth2.Config{}
 
-// Note having verifier as a global is extremly dangerous, will move to db when I get to it
-var verifier string
+var verifiers map[string]verifier
+
+type verifier struct {
+	verifier string
+	ttl      time.Time
+}
 
 func InitOauth(gh_client, gh_secret string) {
 	oauthConfig = &oauth2.Config{
@@ -26,13 +29,19 @@ func InitOauth(gh_client, gh_secret string) {
 		Endpoint:     github.Endpoint,
 		RedirectURL:  "http://localhost:8080/v1/callback",
 	}
+
+	verifiers = map[string]verifier{}
+
+	go cleanupVerifiers()
 }
 
 func Authenticate(w http.ResponseWriter, r *http.Request) error {
 	fmt.Println("CLIENT ID:", oauthConfig.ClientID)
-	verifier = oauth2.GenerateVerifier()
 
-	state, err := generateState()
+	clientIP := utils.GetClientIP(r)
+	verifierStr := oauth2.GenerateVerifier()
+
+	state, err := utils.GenerateState()
 	if err != nil {
 		return err
 	}
@@ -44,7 +53,13 @@ func Authenticate(w http.ResponseWriter, r *http.Request) error {
 	}
 
 	http.SetCookie(w, &cookieState)
-	url := oauthConfig.AuthCodeURL(state, oauth2.S256ChallengeOption(verifier))
+	url := oauthConfig.AuthCodeURL(state, oauth2.S256ChallengeOption(verifierStr))
+
+	newVerifier := verifier{
+		verifier: verifierStr,
+		ttl:      time.Now().Add(24 * time.Hour),
+	}
+	verifiers[clientIP] = newVerifier
 
 	http.Redirect(w, r, url, http.StatusTemporaryRedirect)
 
@@ -53,6 +68,7 @@ func Authenticate(w http.ResponseWriter, r *http.Request) error {
 
 func Callback(w http.ResponseWriter, r *http.Request) ([]byte, error) {
 	ctx := context.Background()
+	clientIP := utils.GetClientIP(r)
 
 	code := r.URL.Query().Get("code")
 	state := r.URL.Query().Get("state")
@@ -66,7 +82,13 @@ func Callback(w http.ResponseWriter, r *http.Request) ([]byte, error) {
 		return nil, fmt.Errorf("error: state does not match")
 	}
 
-	tok, err := oauthConfig.Exchange(ctx, code, oauth2.VerifierOption(verifier))
+	verf, ok := verifiers[clientIP]
+	if !ok {
+		return nil, fmt.Errorf("error: unable to get verifier")
+	}
+
+	fmt.Println(clientIP, ":", verf)
+	tok, err := oauthConfig.Exchange(ctx, code, oauth2.VerifierOption(verf.verifier))
 	if err != nil {
 		return nil, err
 	}
@@ -87,13 +109,14 @@ func Callback(w http.ResponseWriter, r *http.Request) ([]byte, error) {
 	return body, nil
 }
 
-func generateState() (string, error) {
-	state := make([]byte, 24)
-	fmt.Println("GEN")
-	if _, err := io.ReadFull(rand.Reader, state); err != nil {
-		return "", err
-	}
-	fmt.Println("COMPLETE")
+func cleanupVerifiers() {
+	for {
+		time.Sleep(5 * time.Minute)
 
-	return base64.StdEncoding.EncodeToString(state), nil
+		for k, elm := range verifiers {
+			if elm.ttl.Before(time.Now()) {
+				delete(verifiers, k)
+			}
+		}
+	}
 }
