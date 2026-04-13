@@ -202,6 +202,7 @@ func setupPhase4TestDB(t *testing.T) *sql.DB {
 	  root_dir TEXT,
 	  site_url TEXT,
 	  auto_deploy_enabled INTEGER NOT NULL DEFAULT 1,
+	  current_release_version_id INTEGER,
 	  created_at INTEGER NOT NULL DEFAULT (unixepoch()),
 	  updated_at INTEGER NOT NULL DEFAULT (unixepoch())
 	);
@@ -218,6 +219,7 @@ func setupPhase4TestDB(t *testing.T) *sql.DB {
 	  site_url TEXT,
 	  failure_reason TEXT,
 	  correlation_id TEXT,
+	  release_version_id INTEGER,
 	  created_at INTEGER NOT NULL DEFAULT (unixepoch()),
 	  updated_at INTEGER NOT NULL DEFAULT (unixepoch()),
 	  started_at INTEGER,
@@ -255,7 +257,33 @@ func setupPhase4TestDB(t *testing.T) *sql.DB {
 	  failure_count INTEGER NOT NULL DEFAULT 0,
 	  last_success_at INTEGER NOT NULL DEFAULT 0,
 	  last_failure_at INTEGER NOT NULL DEFAULT 0,
+	  last_deploy_at INTEGER NOT NULL DEFAULT 0,
+	  total_duration_seconds INTEGER NOT NULL DEFAULT 0,
+	  latest_duration_seconds INTEGER NOT NULL DEFAULT 0,
+	  rollback_count INTEGER NOT NULL DEFAULT 0,
 	  updated_at INTEGER NOT NULL DEFAULT (unixepoch())
+	);
+	CREATE TABLE IF NOT EXISTS release_versions (
+	  id INTEGER PRIMARY KEY AUTOINCREMENT,
+	  app_id INTEGER NOT NULL,
+	  deployment_id INTEGER NOT NULL,
+	  version_number INTEGER NOT NULL,
+	  artifact_path TEXT NOT NULL,
+	  artifact_checksum TEXT,
+	  is_retained INTEGER NOT NULL DEFAULT 1,
+	  created_at INTEGER NOT NULL DEFAULT (unixepoch()),
+	  UNIQUE(app_id, version_number),
+	  UNIQUE(deployment_id)
+	);
+	CREATE TABLE IF NOT EXISTS rollback_events (
+	  id INTEGER PRIMARY KEY AUTOINCREMENT,
+	  app_id INTEGER NOT NULL,
+	  user_id INTEGER NOT NULL,
+	  from_release_version_id INTEGER,
+	  to_release_version_id INTEGER NOT NULL,
+	  deployment_id INTEGER NOT NULL,
+	  reason TEXT,
+	  created_at INTEGER NOT NULL DEFAULT (unixepoch())
 	);
 	`
 
