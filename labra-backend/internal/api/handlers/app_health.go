@@ -14,6 +14,7 @@ type healthDeploymentSummary struct {
 	TriggerType string `json:"trigger_type"`
 	SiteURL     string `json:"site_url,omitempty"`
 	CommitSHA   string `json:"commit_sha,omitempty"`
+	ReleaseID   int64  `json:"release_id,omitempty"`
 	UpdatedAt   int64  `json:"updated_at"`
 }
 
@@ -23,6 +24,7 @@ type appHealthResponse struct {
 	RepoFullName         string                   `json:"repo_full_name"`
 	Branch               string                   `json:"branch"`
 	CurrentURL           string                   `json:"current_url"`
+	CurrentReleaseID     int64                    `json:"current_release_id,omitempty"`
 	LatestDeployStatus   string                   `json:"latest_deploy_status"`
 	LatestDeploy         *healthDeploymentSummary `json:"latest_deploy,omitempty"`
 	LastSuccessfulDeploy *healthDeploymentSummary `json:"last_successful_deploy,omitempty"`
@@ -32,10 +34,17 @@ type appHealthResponse struct {
 }
 
 type healthMetricsResponse struct {
-	SuccessCount int64   `json:"success_count"`
-	FailureCount int64   `json:"failure_count"`
-	TotalCount   int64   `json:"total_count"`
-	SuccessRate  float64 `json:"success_rate"`
+	SuccessCount    int64   `json:"success_count"`
+	FailureCount    int64   `json:"failure_count"`
+	TotalCount      int64   `json:"total_count"`
+	SuccessRate     float64 `json:"success_rate"`
+	AverageDuration float64 `json:"average_duration_seconds"`
+	LatestDuration  int64   `json:"latest_duration_seconds"`
+	TotalDuration   int64   `json:"total_duration_seconds"`
+	RollbackCount   int64   `json:"rollback_count"`
+	LastDeployAt    int64   `json:"last_deploy_at"`
+	LastSuccessAt   int64   `json:"last_success_at"`
+	LastFailureAt   int64   `json:"last_failure_at"`
 }
 
 func GetAppHealthSummaryHandler(w http.ResponseWriter, r *http.Request) {
@@ -111,8 +120,10 @@ func GetAppHealthSummaryHandler(w http.ResponseWriter, r *http.Request) {
 
 	total := metrics.SuccessCount + metrics.FailureCount
 	successRate := 0.0
+	avgDuration := 0.0
 	if total > 0 {
 		successRate = (float64(metrics.SuccessCount) / float64(total)) * 100
+		avgDuration = float64(metrics.TotalDuration) / float64(total)
 	}
 
 	latestStatus := "unknown"
@@ -126,14 +137,22 @@ func GetAppHealthSummaryHandler(w http.ResponseWriter, r *http.Request) {
 		RepoFullName:         app.RepoFullName,
 		Branch:               app.Branch,
 		CurrentURL:           currentURL,
+		CurrentReleaseID:     app.CurrentReleaseID,
 		LatestDeployStatus:   latestStatus,
 		LatestDeploy:         latestSummary,
 		LastSuccessfulDeploy: lastSuccessSummary,
 		Metrics: healthMetricsResponse{
-			SuccessCount: metrics.SuccessCount,
-			FailureCount: metrics.FailureCount,
-			TotalCount:   total,
-			SuccessRate:  successRate,
+			SuccessCount:    metrics.SuccessCount,
+			FailureCount:    metrics.FailureCount,
+			TotalCount:      total,
+			SuccessRate:     successRate,
+			AverageDuration: avgDuration,
+			LatestDuration:  metrics.LatestDuration,
+			TotalDuration:   metrics.TotalDuration,
+			RollbackCount:   metrics.RollbackCount,
+			LastDeployAt:    metrics.LastDeployAt,
+			LastSuccessAt:   metrics.LastSuccessAt,
+			LastFailureAt:   metrics.LastFailureAt,
 		},
 		AlarmState:      alarmState,
 		HealthIndicator: computeHealthIndicator(latestSummary),
@@ -147,6 +166,7 @@ func toHealthDeploymentSummary(dep store.Deployment) *healthDeploymentSummary {
 		TriggerType: dep.TriggerType,
 		SiteURL:     dep.SiteURL,
 		CommitSHA:   dep.CommitSHA,
+		ReleaseID:   dep.ReleaseID,
 		UpdatedAt:   dep.UpdatedAt,
 	}
 }
