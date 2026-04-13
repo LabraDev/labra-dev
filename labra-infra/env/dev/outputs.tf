@@ -1,5 +1,5 @@
 output "resource_prefix" {
-  value = local.resource_prefix
+  value =  local.resource_prefix
 }
 
 output "tags" {

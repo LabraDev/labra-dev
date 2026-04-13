@@ -15,17 +15,17 @@ variable "component" {
 
 variable "aws_region" {
   type    = string
-  default = "us-west-2"
+  default = "us-west-1"
 
   validation {
     condition     = can(regex("^[a-z]{2}(-[a-z]+)+-[0-9]+$", var.aws_region))
-    error_message = "aws_region must look like us-west-2."
+    error_message = "aws_region must look like us-west-1."
   }
 }
 
 variable "owner" {
   type    = string
-  default = "cpsc465-infra"
+  default = "labra-infra"
 }
 
 variable "extra_tags" {
