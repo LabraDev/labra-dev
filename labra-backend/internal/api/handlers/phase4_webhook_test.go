@@ -188,6 +188,7 @@ func setupPhase4TestDB(t *testing.T) *sql.DB {
 	if err != nil {
 		t.Fatalf("open sqlite: %v", err)
 	}
+	db.SetMaxOpenConns(1)
 
 	schema := `
 	CREATE TABLE IF NOT EXISTS apps (
@@ -237,6 +238,24 @@ func setupPhase4TestDB(t *testing.T) *sql.DB {
 	  commit_sha TEXT,
 	  received_at INTEGER NOT NULL DEFAULT (unixepoch()),
 	  UNIQUE(app_id, delivery_id)
+	);
+	CREATE TABLE IF NOT EXISTS app_env_vars (
+	  id INTEGER PRIMARY KEY AUTOINCREMENT,
+	  app_id INTEGER NOT NULL,
+	  key TEXT NOT NULL,
+	  value TEXT NOT NULL,
+	  is_secret INTEGER NOT NULL DEFAULT 0,
+	  created_at INTEGER NOT NULL DEFAULT (unixepoch()),
+	  updated_at INTEGER NOT NULL DEFAULT (unixepoch()),
+	  UNIQUE(app_id, key)
+	);
+	CREATE TABLE IF NOT EXISTS app_health_metrics (
+	  app_id INTEGER PRIMARY KEY,
+	  success_count INTEGER NOT NULL DEFAULT 0,
+	  failure_count INTEGER NOT NULL DEFAULT 0,
+	  last_success_at INTEGER NOT NULL DEFAULT 0,
+	  last_failure_at INTEGER NOT NULL DEFAULT 0,
+	  updated_at INTEGER NOT NULL DEFAULT (unixepoch())
 	);
 	`
 
