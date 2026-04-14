@@ -5,6 +5,8 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"os"
+	"strconv"
 	"strings"
 	"time"
 
@@ -55,10 +57,17 @@ func CreateDeployHandler(w http.ResponseWriter, r *http.Request) {
 
 	_ = appStore.CreateDeploymentLog(r.Context(), deployment.ID, "info", "deployment queued by manual trigger")
 
-	go runManualDeployment(deployment.ID, app)
+	job, err := enqueueDeploymentJob(r.Context(), deployment)
+	if err != nil {
+		_, _ = appStore.UpdateDeploymentOutcome(r.Context(), deployment.ID, "failed", "unable to enqueue deployment job", "queue", false, "", 0, store.UnixNow())
+		_ = appStore.CreateDeploymentLog(r.Context(), deployment.ID, "error", "deployment queue enqueue failed")
+		writeJSONError(w, http.StatusInternalServerError, "failed to enqueue deployment job")
+		return
+	}
 
 	writeJSON(w, http.StatusAccepted, map[string]any{
 		"deployment": deployment,
+		"job":        job,
 	})
 }
 
@@ -135,41 +144,25 @@ func GetDeployLogsHandler(w http.ResponseWriter, r *http.Request) {
 
 func runManualDeployment(deploymentID int64, app store.App) {
 	ctx := context.Background()
-	start := store.UnixNow()
-
-	_, _ = appStore.UpdateDeploymentStatus(ctx, deploymentID, "running", "", app.SiteURL, start, 0)
-	_ = appStore.CreateDeploymentLog(ctx, deploymentID, "info", "clone repository")
-	_ = appStore.CreateDeploymentLog(ctx, deploymentID, "info", fmt.Sprintf("checkout branch %s", app.Branch))
-	envVars, envErr := appStore.ListAppEnvVarsForApp(ctx, app.ID)
-	if envErr != nil {
-		_ = appStore.CreateDeploymentLog(ctx, deploymentID, "warn", "unable to load app env vars; continuing without injected env vars")
-		envVars = nil
-	}
-	deploymentEnv := buildDeploymentEnv(envVars)
-	_ = deploymentEnv // placeholder for Phase 8 worker runtime integration
-	_ = appStore.CreateDeploymentLog(ctx, deploymentID, "info", describeEnvInjection(envVars))
-	_ = appStore.CreateDeploymentLog(ctx, deploymentID, "info", "install dependencies")
-	_ = appStore.CreateDeploymentLog(ctx, deploymentID, "info", "run build")
-	_ = appStore.CreateDeploymentLog(ctx, deploymentID, "info", "upload static artifacts")
-	_ = appStore.CreateDeploymentLog(ctx, deploymentID, "info", "invalidate CDN cache")
-
-	if app.BuildType != "static" {
-		finish := store.UnixNow()
-		_, _ = appStore.UpdateDeploymentStatus(ctx, deploymentID, "failed", "unsupported build type", "", start, finish)
-		_ = appStore.CreateDeploymentLog(ctx, deploymentID, "error", "deployment failed: unsupported build type")
-		_ = appStore.RecordAppDeploymentOutcome(ctx, app.ID, "failed", finish)
+	dep, err := appStore.GetDeploymentByIDForUser(ctx, deploymentID, app.UserID)
+	if err != nil {
 		return
 	}
 
-	siteURL := strings.TrimSpace(app.SiteURL)
-	if siteURL == "" {
-		siteURL = fmt.Sprintf("https://%s.preview.labra.local", slugify(app.Name))
+	start := store.UnixNow()
+	_, _ = appStore.UpdateDeploymentOutcome(ctx, deploymentID, "running", "", "", false, app.SiteURL, start, 0)
+	siteURL, execErr := executeStandardAttempt(ctx, dep.ID, app, 1)
+	if execErr != nil {
+		category, retryable, reason := classifyDeploymentFailure(execErr)
+		finish := store.UnixNow()
+		_, _ = appStore.UpdateDeploymentOutcome(ctx, deploymentID, "failed", reason, category, retryable, "", start, finish)
+		_ = appStore.RecordAppDeploymentOutcome(ctx, app.ID, "failed", start, finish, normalizedTrigger(dep.TriggerType))
+		return
 	}
 
 	finish := store.UnixNow()
-	_ = appStore.CreateDeploymentLog(ctx, deploymentID, "info", "deployment completed successfully")
-	_, _ = appStore.UpdateDeploymentStatus(ctx, deploymentID, "succeeded", "", siteURL, start, finish)
-	_ = appStore.RecordAppDeploymentOutcome(ctx, app.ID, "succeeded", finish)
+	_, _ = appStore.UpdateDeploymentOutcome(ctx, deploymentID, "succeeded", "", "", false, siteURL, start, finish)
+	_ = appStore.RecordAppDeploymentOutcome(ctx, app.ID, "succeeded", start, finish, normalizedTrigger(dep.TriggerType))
 }
 
 func slugify(in string) string {
@@ -202,4 +195,26 @@ func buildDeploymentEnv(envVars []store.AppEnvVar) map[string]string {
 		env[envVar.Key] = envVar.Value
 	}
 	return env
+}
+
+func releaseRetentionLimit() int {
+	raw := strings.TrimSpace(os.Getenv("RELEASE_RETENTION_LIMIT"))
+	if raw == "" {
+		return 20
+	}
+	v, err := strconv.Atoi(raw)
+	if err != nil || v <= 0 {
+		return 20
+	}
+	if v > 200 {
+		return 200
+	}
+	return v
+}
+
+func buildArtifactPath(appID, deploymentID, finishedAt int64) string {
+	if finishedAt <= 0 {
+		finishedAt = store.UnixNow()
+	}
+	return fmt.Sprintf("releases/app-%d/deploy-%d-%d.tgz", appID, deploymentID, finishedAt)
 }

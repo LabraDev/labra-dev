@@ -1,5 +1,5 @@
 <script lang="ts">
-	import type { Deployment, DeploymentLog } from '$lib/api';
+	import type { Deployment, DeploymentLog, DeploymentQueueStatus } from '$lib/api';
 	import { apiGET, prettyDate, shortSHA } from '$lib/api';
 	import { onMount } from 'svelte';
 
@@ -10,6 +10,11 @@
 	let error = '';
 	let deploy: Deployment | null = null;
 	let logs: DeploymentLog[] = [];
+	let queueStatus: DeploymentQueueStatus | null = null;
+	$: durationSeconds =
+		deploy && deploy.started_at && deploy.finished_at && deploy.finished_at >= deploy.started_at
+			? deploy.finished_at - deploy.started_at
+			: 0;
 
 	async function loadPage() {
 		loading = true;
@@ -18,10 +23,16 @@
 			deploy = await apiGET<Deployment>(`/v1/deploys/${data.deployID}`, userID);
 			const logRes = await apiGET<{ logs: DeploymentLog[] }>(`/v1/deploys/${data.deployID}/logs`, userID);
 			logs = logRes.logs ?? [];
+			try {
+				queueStatus = await apiGET<DeploymentQueueStatus>(`/v1/deploys/${data.deployID}/queue`, userID);
+			} catch {
+				queueStatus = null;
+			}
 		} catch (err) {
 			error = err instanceof Error ? err.message : 'failed to load deploy details';
 			deploy = null;
 			logs = [];
+			queueStatus = null;
 		} finally {
 			loading = false;
 		}
@@ -59,8 +70,12 @@
 				<h2>Status</h2>
 				<p><strong>{deploy.status}</strong></p>
 				<p><strong>Trigger:</strong> {deploy.trigger_type}</p>
+				<p><strong>Release:</strong> {deploy.release_id || 'n/a'}</p>
+				<p><strong>Duration:</strong> {durationSeconds > 0 ? `${durationSeconds}s` : 'n/a'}</p>
 				<p><strong>Updated:</strong> {prettyDate(deploy.updated_at)}</p>
 				<p><strong>Site URL:</strong> {deploy.site_url || 'n/a'}</p>
+				<p><strong>Failure Category:</strong> {deploy.failure_category || 'n/a'}</p>
+				<p><strong>Retryable:</strong> {deploy.retryable ? 'yes' : 'no'}</p>
 			</article>
 			<article>
 				<h2>Commit</h2>
@@ -69,6 +84,15 @@
 				<p><strong>Message:</strong> {deploy.commit_message || 'n/a'}</p>
 				<p><strong>Branch:</strong> {deploy.branch || 'n/a'}</p>
 			</article>
+			{#if queueStatus}
+				<article>
+					<h2>Queue</h2>
+					<p><strong>Job Status:</strong> {queueStatus.job.status}</p>
+					<p><strong>Attempts:</strong> {queueStatus.job.attempt_count}/{queueStatus.job.max_attempts}</p>
+					<p><strong>Next Retry In:</strong> {queueStatus.next_retry_in_seconds > 0 ? `${queueStatus.next_retry_in_seconds}s` : 'n/a'}</p>
+					<p><strong>Last Error:</strong> {queueStatus.job.last_error || 'n/a'}</p>
+				</article>
+			{/if}
 		</div>
 
 		<h2>Logs</h2>

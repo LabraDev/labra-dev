@@ -11,27 +11,31 @@ type App struct {
 	RootDir           string `json:"root_dir,omitempty"`
 	SiteURL           string `json:"site_url,omitempty"`
 	AutoDeployEnabled bool   `json:"auto_deploy_enabled"`
+	CurrentReleaseID  int64  `json:"current_release_id,omitempty"`
 	CreatedAt         int64  `json:"created_at"`
 	UpdatedAt         int64  `json:"updated_at"`
 }
 
 type Deployment struct {
-	ID            int64  `json:"id"`
-	AppID         int64  `json:"app_id"`
-	UserID        int64  `json:"user_id"`
-	Status        string `json:"status"`
-	TriggerType   string `json:"trigger_type"`
-	CommitSHA     string `json:"commit_sha,omitempty"`
-	CommitMessage string `json:"commit_message,omitempty"`
-	CommitAuthor  string `json:"commit_author,omitempty"`
-	Branch        string `json:"branch,omitempty"`
-	SiteURL       string `json:"site_url,omitempty"`
-	FailureReason string `json:"failure_reason,omitempty"`
-	CorrelationID string `json:"correlation_id,omitempty"`
-	CreatedAt     int64  `json:"created_at"`
-	UpdatedAt     int64  `json:"updated_at"`
-	StartedAt     int64  `json:"started_at,omitempty"`
-	FinishedAt    int64  `json:"finished_at,omitempty"`
+	ID              int64  `json:"id"`
+	AppID           int64  `json:"app_id"`
+	UserID          int64  `json:"user_id"`
+	Status          string `json:"status"`
+	TriggerType     string `json:"trigger_type"`
+	CommitSHA       string `json:"commit_sha,omitempty"`
+	CommitMessage   string `json:"commit_message,omitempty"`
+	CommitAuthor    string `json:"commit_author,omitempty"`
+	Branch          string `json:"branch,omitempty"`
+	SiteURL         string `json:"site_url,omitempty"`
+	FailureReason   string `json:"failure_reason,omitempty"`
+	FailureCategory string `json:"failure_category,omitempty"`
+	Retryable       bool   `json:"retryable"`
+	CorrelationID   string `json:"correlation_id,omitempty"`
+	ReleaseID       int64  `json:"release_id,omitempty"`
+	CreatedAt       int64  `json:"created_at"`
+	UpdatedAt       int64  `json:"updated_at"`
+	StartedAt       int64  `json:"started_at,omitempty"`
+	FinishedAt      int64  `json:"finished_at,omitempty"`
 }
 
 type DeploymentLog struct {
@@ -53,12 +57,75 @@ type AppEnvVar struct {
 }
 
 type AppHealthMetrics struct {
-	AppID         int64 `json:"app_id"`
-	SuccessCount  int64 `json:"success_count"`
-	FailureCount  int64 `json:"failure_count"`
-	LastSuccessAt int64 `json:"last_success_at"`
-	LastFailureAt int64 `json:"last_failure_at"`
-	UpdatedAt     int64 `json:"updated_at"`
+	AppID          int64 `json:"app_id"`
+	SuccessCount   int64 `json:"success_count"`
+	FailureCount   int64 `json:"failure_count"`
+	LastSuccessAt  int64 `json:"last_success_at"`
+	LastFailureAt  int64 `json:"last_failure_at"`
+	LastDeployAt   int64 `json:"last_deploy_at"`
+	TotalDuration  int64 `json:"total_duration_seconds"`
+	LatestDuration int64 `json:"latest_duration_seconds"`
+	RollbackCount  int64 `json:"rollback_count"`
+	UpdatedAt      int64 `json:"updated_at"`
+}
+
+type ReleaseVersion struct {
+	ID               int64  `json:"id"`
+	AppID            int64  `json:"app_id"`
+	DeploymentID     int64  `json:"deployment_id"`
+	VersionNumber    int64  `json:"version_number"`
+	ArtifactPath     string `json:"artifact_path"`
+	ArtifactChecksum string `json:"artifact_checksum,omitempty"`
+	IsRetained       bool   `json:"is_retained"`
+	CreatedAt        int64  `json:"created_at"`
+}
+
+type RollbackEvent struct {
+	ID            int64  `json:"id"`
+	AppID         int64  `json:"app_id"`
+	UserID        int64  `json:"user_id"`
+	FromReleaseID int64  `json:"from_release_id,omitempty"`
+	ToReleaseID   int64  `json:"to_release_id"`
+	DeploymentID  int64  `json:"deployment_id"`
+	Reason        string `json:"reason,omitempty"`
+	CreatedAt     int64  `json:"created_at"`
+}
+
+type LogQueryHit struct {
+	LogID        int64  `json:"log_id"`
+	DeploymentID int64  `json:"deployment_id"`
+	LogLevel     string `json:"log_level"`
+	Message      string `json:"message"`
+	CreatedAt    int64  `json:"created_at"`
+	Status       string `json:"status"`
+	TriggerType  string `json:"trigger_type"`
+	ReleaseID    int64  `json:"release_id,omitempty"`
+}
+
+type DeploymentJob struct {
+	ID            int64  `json:"id"`
+	DeploymentID  int64  `json:"deployment_id"`
+	AppID         int64  `json:"app_id"`
+	UserID        int64  `json:"user_id"`
+	Status        string `json:"status"`
+	AttemptCount  int64  `json:"attempt_count"`
+	MaxAttempts   int64  `json:"max_attempts"`
+	NextAttemptAt int64  `json:"next_attempt_at"`
+	LastError     string `json:"last_error,omitempty"`
+	ErrorCategory string `json:"error_category,omitempty"`
+	ClaimedBy     string `json:"claimed_by,omitempty"`
+	CreatedAt     int64  `json:"created_at"`
+	UpdatedAt     int64  `json:"updated_at"`
+	StartedAt     int64  `json:"started_at,omitempty"`
+	FinishedAt    int64  `json:"finished_at,omitempty"`
+}
+
+type DeploymentRollbackPayload struct {
+	DeploymentID    int64  `json:"deployment_id"`
+	FromReleaseID   int64  `json:"from_release_id"`
+	TargetReleaseID int64  `json:"target_release_id"`
+	Reason          string `json:"reason,omitempty"`
+	CreatedAt       int64  `json:"created_at"`
 }
 
 type CreateAppInput struct {
@@ -84,19 +151,21 @@ type UpdateAppInput struct {
 }
 
 type CreateDeploymentInput struct {
-	AppID         int64
-	UserID        int64
-	Status        string
-	TriggerType   string
-	CommitSHA     string
-	CommitMessage string
-	CommitAuthor  string
-	Branch        string
-	SiteURL       string
-	FailureReason string
-	CorrelationID string
-	StartedAt     int64
-	FinishedAt    int64
+	AppID           int64
+	UserID          int64
+	Status          string
+	TriggerType     string
+	CommitSHA       string
+	CommitMessage   string
+	CommitAuthor    string
+	Branch          string
+	SiteURL         string
+	FailureReason   string
+	FailureCategory string
+	Retryable       bool
+	CorrelationID   string
+	StartedAt       int64
+	FinishedAt      int64
 }
 
 type CreateAppEnvVarInput struct {
@@ -109,4 +178,27 @@ type UpdateAppEnvVarInput struct {
 	Key      string
 	Value    string
 	IsSecret bool
+}
+
+type CreateReleaseVersionInput struct {
+	AppID            int64
+	DeploymentID     int64
+	ArtifactPath     string
+	ArtifactChecksum string
+}
+
+type CreateRollbackEventInput struct {
+	AppID         int64
+	UserID        int64
+	FromReleaseID int64
+	ToReleaseID   int64
+	DeploymentID  int64
+	Reason        string
+}
+
+type CreateDeploymentJobInput struct {
+	DeploymentID int64
+	AppID        int64
+	UserID       int64
+	MaxAttempts  int64
 }

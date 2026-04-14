@@ -202,6 +202,7 @@ func setupPhase4TestDB(t *testing.T) *sql.DB {
 	  root_dir TEXT,
 	  site_url TEXT,
 	  auto_deploy_enabled INTEGER NOT NULL DEFAULT 1,
+	  current_release_version_id INTEGER,
 	  created_at INTEGER NOT NULL DEFAULT (unixepoch()),
 	  updated_at INTEGER NOT NULL DEFAULT (unixepoch())
 	);
@@ -217,7 +218,10 @@ func setupPhase4TestDB(t *testing.T) *sql.DB {
 	  branch TEXT,
 	  site_url TEXT,
 	  failure_reason TEXT,
+	  failure_category TEXT,
+	  retryable INTEGER NOT NULL DEFAULT 0,
 	  correlation_id TEXT,
+	  release_version_id INTEGER,
 	  created_at INTEGER NOT NULL DEFAULT (unixepoch()),
 	  updated_at INTEGER NOT NULL DEFAULT (unixepoch()),
 	  started_at INTEGER,
@@ -255,7 +259,67 @@ func setupPhase4TestDB(t *testing.T) *sql.DB {
 	  failure_count INTEGER NOT NULL DEFAULT 0,
 	  last_success_at INTEGER NOT NULL DEFAULT 0,
 	  last_failure_at INTEGER NOT NULL DEFAULT 0,
+	  last_deploy_at INTEGER NOT NULL DEFAULT 0,
+	  total_duration_seconds INTEGER NOT NULL DEFAULT 0,
+	  latest_duration_seconds INTEGER NOT NULL DEFAULT 0,
+	  rollback_count INTEGER NOT NULL DEFAULT 0,
 	  updated_at INTEGER NOT NULL DEFAULT (unixepoch())
+	);
+	CREATE TABLE IF NOT EXISTS release_versions (
+	  id INTEGER PRIMARY KEY AUTOINCREMENT,
+	  app_id INTEGER NOT NULL,
+	  deployment_id INTEGER NOT NULL,
+	  version_number INTEGER NOT NULL,
+	  artifact_path TEXT NOT NULL,
+	  artifact_checksum TEXT,
+	  is_retained INTEGER NOT NULL DEFAULT 1,
+	  created_at INTEGER NOT NULL DEFAULT (unixepoch()),
+	  UNIQUE(app_id, version_number),
+	  UNIQUE(deployment_id)
+	);
+	CREATE TABLE IF NOT EXISTS rollback_events (
+	  id INTEGER PRIMARY KEY AUTOINCREMENT,
+	  app_id INTEGER NOT NULL,
+	  user_id INTEGER NOT NULL,
+	  from_release_version_id INTEGER,
+	  to_release_version_id INTEGER NOT NULL,
+	  deployment_id INTEGER NOT NULL,
+	  reason TEXT,
+	  created_at INTEGER NOT NULL DEFAULT (unixepoch())
+	);
+	CREATE UNIQUE INDEX IF NOT EXISTS idx_rollback_events_deployment
+	  ON rollback_events(deployment_id);
+	CREATE TABLE IF NOT EXISTS deployment_jobs (
+	  id INTEGER PRIMARY KEY AUTOINCREMENT,
+	  deployment_id INTEGER NOT NULL,
+	  app_id INTEGER NOT NULL,
+	  user_id INTEGER NOT NULL,
+	  status TEXT NOT NULL DEFAULT 'queued',
+	  attempt_count INTEGER NOT NULL DEFAULT 0,
+	  max_attempts INTEGER NOT NULL DEFAULT 3,
+	  next_attempt_at INTEGER NOT NULL DEFAULT (unixepoch()),
+	  last_error TEXT,
+	  error_category TEXT,
+	  created_at INTEGER NOT NULL DEFAULT (unixepoch()),
+	  updated_at INTEGER NOT NULL DEFAULT (unixepoch()),
+	  started_at INTEGER,
+	  finished_at INTEGER,
+	  claimed_by TEXT,
+	  UNIQUE(deployment_id)
+	);
+	CREATE INDEX IF NOT EXISTS idx_deployment_jobs_status_next_attempt
+	  ON deployment_jobs(status, next_attempt_at ASC);
+	CREATE INDEX IF NOT EXISTS idx_deployment_jobs_app_status
+	  ON deployment_jobs(app_id, status);
+	CREATE UNIQUE INDEX IF NOT EXISTS idx_deployment_jobs_app_running
+	  ON deployment_jobs(app_id)
+	  WHERE status = 'running';
+	CREATE TABLE IF NOT EXISTS deployment_rollback_payloads (
+	  deployment_id INTEGER PRIMARY KEY,
+	  from_release_id INTEGER NOT NULL,
+	  target_release_id INTEGER NOT NULL,
+	  reason TEXT,
+	  created_at INTEGER NOT NULL DEFAULT (unixepoch())
 	);
 	`
 
@@ -263,7 +327,19 @@ func setupPhase4TestDB(t *testing.T) *sql.DB {
 		t.Fatalf("apply schema: %v", err)
 	}
 
+	StopDeploymentQueueWorker()
 	InitAppStore(db)
+	t.Setenv("DEPLOY_QUEUE_POLL_MS", "25")
+	t.Setenv("DEPLOY_WORKER_CONCURRENCY", "2")
+	t.Setenv("DEPLOY_MAX_ATTEMPTS", "3")
+	t.Setenv("DEPLOY_RETRY_BASE_SECONDS", "1")
+	t.Setenv("DEPLOY_RETRY_MAX_SECONDS", "4")
+	if err := StartDeploymentQueueWorker(); err != nil {
+		t.Fatalf("start deployment queue worker: %v", err)
+	}
+	t.Cleanup(func() {
+		StopDeploymentQueueWorker()
+	})
 	InitWebhook("test-secret")
 
 	return db

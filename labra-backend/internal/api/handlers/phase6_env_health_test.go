@@ -211,7 +211,7 @@ func TestGetAppHealthSummaryHandlerReturnsExpectedShape(t *testing.T) {
 	if _, err := appStore.UpdateDeploymentStatus(context.Background(), dep1.ID, "succeeded", "", "https://demo.preview.labra.local", 100, 110); err != nil {
 		t.Fatalf("mark deployment #1 succeeded: %v", err)
 	}
-	if err := appStore.RecordAppDeploymentOutcome(context.Background(), app.ID, "succeeded", 110); err != nil {
+	if err := appStore.RecordAppDeploymentOutcome(context.Background(), app.ID, "succeeded", 100, 110, "manual"); err != nil {
 		t.Fatalf("record deployment #1 outcome: %v", err)
 	}
 
@@ -228,7 +228,7 @@ func TestGetAppHealthSummaryHandlerReturnsExpectedShape(t *testing.T) {
 	if _, err := appStore.UpdateDeploymentStatus(context.Background(), dep2.ID, "failed", "build failed", "", 120, 130); err != nil {
 		t.Fatalf("mark deployment #2 failed: %v", err)
 	}
-	if err := appStore.RecordAppDeploymentOutcome(context.Background(), app.ID, "failed", 130); err != nil {
+	if err := appStore.RecordAppDeploymentOutcome(context.Background(), app.ID, "failed", 120, 130, "manual"); err != nil {
 		t.Fatalf("record deployment #2 outcome: %v", err)
 	}
 
