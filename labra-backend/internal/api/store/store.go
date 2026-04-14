@@ -15,8 +15,61 @@ type Store struct {
 	db *sql.DB
 }
 
+type rowScanner interface {
+	Scan(dest ...any) error
+}
+
 func New(db *sql.DB) *Store {
 	return &Store{db: db}
+}
+
+func scanDeployment(scanner rowScanner, dep *Deployment) error {
+	var retryableInt int
+	if err := scanner.Scan(
+		&dep.ID,
+		&dep.AppID,
+		&dep.UserID,
+		&dep.Status,
+		&dep.TriggerType,
+		&dep.CommitSHA,
+		&dep.CommitMessage,
+		&dep.CommitAuthor,
+		&dep.Branch,
+		&dep.SiteURL,
+		&dep.FailureReason,
+		&dep.FailureCategory,
+		&retryableInt,
+		&dep.CorrelationID,
+		&dep.ReleaseID,
+		&dep.CreatedAt,
+		&dep.UpdatedAt,
+		&dep.StartedAt,
+		&dep.FinishedAt,
+	); err != nil {
+		return err
+	}
+	dep.Retryable = retryableInt == 1
+	return nil
+}
+
+func scanDeploymentJob(scanner rowScanner, job *DeploymentJob) error {
+	return scanner.Scan(
+		&job.ID,
+		&job.DeploymentID,
+		&job.AppID,
+		&job.UserID,
+		&job.Status,
+		&job.AttemptCount,
+		&job.MaxAttempts,
+		&job.NextAttemptAt,
+		&job.LastError,
+		&job.ErrorCategory,
+		&job.ClaimedBy,
+		&job.CreatedAt,
+		&job.UpdatedAt,
+		&job.StartedAt,
+		&job.FinishedAt,
+	)
 }
 
 func (s *Store) CreateApp(ctx context.Context, in CreateAppInput) (App, error) {
@@ -137,18 +190,17 @@ func (s *Store) CreateDeployment(ctx context.Context, in CreateDeploymentInput) 
 
 	row := s.db.QueryRowContext(ctx, `
 		INSERT INTO deployments (
-			app_id, user_id, status, trigger_type, commit_sha, commit_message, commit_author, branch, site_url, failure_reason, correlation_id, release_version_id,
+			app_id, user_id, status, trigger_type, commit_sha, commit_message, commit_author, branch, site_url, failure_reason, failure_category, retryable, correlation_id, release_version_id,
 			created_at, updated_at, started_at, finished_at
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, unixepoch(), unixepoch(), ?, ?)
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, unixepoch(), unixepoch(), ?, ?)
 		RETURNING id, app_id, user_id, status, trigger_type, COALESCE(commit_sha, ''), COALESCE(commit_message, ''), COALESCE(commit_author, ''),
-			COALESCE(branch, ''), COALESCE(site_url, ''), COALESCE(failure_reason, ''), COALESCE(correlation_id, ''), COALESCE(release_version_id, 0), created_at, updated_at,
+			COALESCE(branch, ''), COALESCE(site_url, ''), COALESCE(failure_reason, ''), COALESCE(failure_category, ''), COALESCE(retryable, 0), COALESCE(correlation_id, ''), COALESCE(release_version_id, 0), created_at, updated_at,
 			COALESCE(started_at, 0), COALESCE(finished_at, 0)
 	`, in.AppID, in.UserID, in.Status, in.TriggerType, nullIfEmpty(in.CommitSHA), nullIfEmpty(in.CommitMessage), nullIfEmpty(in.CommitAuthor),
-		nullIfEmpty(in.Branch), nullIfEmpty(in.SiteURL), nullIfEmpty(in.FailureReason), nullIfEmpty(in.CorrelationID), nil, startedAt, finishedAt)
+		nullIfEmpty(in.Branch), nullIfEmpty(in.SiteURL), nullIfEmpty(in.FailureReason), nullIfEmpty(in.FailureCategory), boolToInt(in.Retryable), nullIfEmpty(in.CorrelationID), nil, startedAt, finishedAt)
 
 	var dep Deployment
-	if err := row.Scan(&dep.ID, &dep.AppID, &dep.UserID, &dep.Status, &dep.TriggerType, &dep.CommitSHA, &dep.CommitMessage, &dep.CommitAuthor,
-		&dep.Branch, &dep.SiteURL, &dep.FailureReason, &dep.CorrelationID, &dep.ReleaseID, &dep.CreatedAt, &dep.UpdatedAt, &dep.StartedAt, &dep.FinishedAt); err != nil {
+	if err := scanDeployment(row, &dep); err != nil {
 		return Deployment{}, err
 	}
 	return dep, nil
@@ -157,15 +209,14 @@ func (s *Store) CreateDeployment(ctx context.Context, in CreateDeploymentInput) 
 func (s *Store) GetDeploymentByIDForUser(ctx context.Context, deploymentID, userID int64) (Deployment, error) {
 	row := s.db.QueryRowContext(ctx, `
 		SELECT id, app_id, user_id, status, trigger_type, COALESCE(commit_sha, ''), COALESCE(commit_message, ''), COALESCE(commit_author, ''),
-			COALESCE(branch, ''), COALESCE(site_url, ''), COALESCE(failure_reason, ''), COALESCE(correlation_id, ''), COALESCE(release_version_id, 0), created_at, updated_at,
+			COALESCE(branch, ''), COALESCE(site_url, ''), COALESCE(failure_reason, ''), COALESCE(failure_category, ''), COALESCE(retryable, 0), COALESCE(correlation_id, ''), COALESCE(release_version_id, 0), created_at, updated_at,
 			COALESCE(started_at, 0), COALESCE(finished_at, 0)
 		FROM deployments
 		WHERE id = ? AND user_id = ?
 	`, deploymentID, userID)
 
 	var dep Deployment
-	if err := row.Scan(&dep.ID, &dep.AppID, &dep.UserID, &dep.Status, &dep.TriggerType, &dep.CommitSHA, &dep.CommitMessage, &dep.CommitAuthor,
-		&dep.Branch, &dep.SiteURL, &dep.FailureReason, &dep.CorrelationID, &dep.ReleaseID, &dep.CreatedAt, &dep.UpdatedAt, &dep.StartedAt, &dep.FinishedAt); err != nil {
+	if err := scanDeployment(row, &dep); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return Deployment{}, ErrNotFound
 		}
@@ -177,7 +228,7 @@ func (s *Store) GetDeploymentByIDForUser(ctx context.Context, deploymentID, user
 func (s *Store) ListDeploymentsByAppForUser(ctx context.Context, appID, userID int64) ([]Deployment, error) {
 	rows, err := s.db.QueryContext(ctx, `
 		SELECT id, app_id, user_id, status, trigger_type, COALESCE(commit_sha, ''), COALESCE(commit_message, ''), COALESCE(commit_author, ''),
-			COALESCE(branch, ''), COALESCE(site_url, ''), COALESCE(failure_reason, ''), COALESCE(correlation_id, ''), COALESCE(release_version_id, 0), created_at, updated_at,
+			COALESCE(branch, ''), COALESCE(site_url, ''), COALESCE(failure_reason, ''), COALESCE(failure_category, ''), COALESCE(retryable, 0), COALESCE(correlation_id, ''), COALESCE(release_version_id, 0), created_at, updated_at,
 			COALESCE(started_at, 0), COALESCE(finished_at, 0)
 		FROM deployments
 		WHERE app_id = ? AND user_id = ?
@@ -191,8 +242,7 @@ func (s *Store) ListDeploymentsByAppForUser(ctx context.Context, appID, userID i
 	out := make([]Deployment, 0)
 	for rows.Next() {
 		var dep Deployment
-		if err := rows.Scan(&dep.ID, &dep.AppID, &dep.UserID, &dep.Status, &dep.TriggerType, &dep.CommitSHA, &dep.CommitMessage, &dep.CommitAuthor,
-			&dep.Branch, &dep.SiteURL, &dep.FailureReason, &dep.CorrelationID, &dep.ReleaseID, &dep.CreatedAt, &dep.UpdatedAt, &dep.StartedAt, &dep.FinishedAt); err != nil {
+		if err := scanDeployment(rows, &dep); err != nil {
 			return nil, err
 		}
 		out = append(out, dep)
@@ -203,7 +253,7 @@ func (s *Store) ListDeploymentsByAppForUser(ctx context.Context, appID, userID i
 func (s *Store) GetLatestDeploymentByAppForUser(ctx context.Context, appID, userID int64) (Deployment, error) {
 	row := s.db.QueryRowContext(ctx, `
 		SELECT id, app_id, user_id, status, trigger_type, COALESCE(commit_sha, ''), COALESCE(commit_message, ''), COALESCE(commit_author, ''),
-			COALESCE(branch, ''), COALESCE(site_url, ''), COALESCE(failure_reason, ''), COALESCE(correlation_id, ''), COALESCE(release_version_id, 0), created_at, updated_at,
+			COALESCE(branch, ''), COALESCE(site_url, ''), COALESCE(failure_reason, ''), COALESCE(failure_category, ''), COALESCE(retryable, 0), COALESCE(correlation_id, ''), COALESCE(release_version_id, 0), created_at, updated_at,
 			COALESCE(started_at, 0), COALESCE(finished_at, 0)
 		FROM deployments
 		WHERE app_id = ? AND user_id = ?
@@ -212,8 +262,7 @@ func (s *Store) GetLatestDeploymentByAppForUser(ctx context.Context, appID, user
 	`, appID, userID)
 
 	var dep Deployment
-	if err := row.Scan(&dep.ID, &dep.AppID, &dep.UserID, &dep.Status, &dep.TriggerType, &dep.CommitSHA, &dep.CommitMessage, &dep.CommitAuthor,
-		&dep.Branch, &dep.SiteURL, &dep.FailureReason, &dep.CorrelationID, &dep.ReleaseID, &dep.CreatedAt, &dep.UpdatedAt, &dep.StartedAt, &dep.FinishedAt); err != nil {
+	if err := scanDeployment(row, &dep); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return Deployment{}, ErrNotFound
 		}
@@ -225,7 +274,7 @@ func (s *Store) GetLatestDeploymentByAppForUser(ctx context.Context, appID, user
 func (s *Store) GetLastSuccessfulDeploymentByAppForUser(ctx context.Context, appID, userID int64) (Deployment, error) {
 	row := s.db.QueryRowContext(ctx, `
 		SELECT id, app_id, user_id, status, trigger_type, COALESCE(commit_sha, ''), COALESCE(commit_message, ''), COALESCE(commit_author, ''),
-			COALESCE(branch, ''), COALESCE(site_url, ''), COALESCE(failure_reason, ''), COALESCE(correlation_id, ''), COALESCE(release_version_id, 0), created_at, updated_at,
+			COALESCE(branch, ''), COALESCE(site_url, ''), COALESCE(failure_reason, ''), COALESCE(failure_category, ''), COALESCE(retryable, 0), COALESCE(correlation_id, ''), COALESCE(release_version_id, 0), created_at, updated_at,
 			COALESCE(started_at, 0), COALESCE(finished_at, 0)
 		FROM deployments
 		WHERE app_id = ? AND user_id = ? AND status = 'succeeded'
@@ -234,8 +283,7 @@ func (s *Store) GetLastSuccessfulDeploymentByAppForUser(ctx context.Context, app
 	`, appID, userID)
 
 	var dep Deployment
-	if err := row.Scan(&dep.ID, &dep.AppID, &dep.UserID, &dep.Status, &dep.TriggerType, &dep.CommitSHA, &dep.CommitMessage, &dep.CommitAuthor,
-		&dep.Branch, &dep.SiteURL, &dep.FailureReason, &dep.CorrelationID, &dep.ReleaseID, &dep.CreatedAt, &dep.UpdatedAt, &dep.StartedAt, &dep.FinishedAt); err != nil {
+	if err := scanDeployment(row, &dep); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return Deployment{}, ErrNotFound
 		}
@@ -259,13 +307,12 @@ func (s *Store) UpdateDeploymentStatus(ctx context.Context, deploymentID int64, 
 		SET status = ?, failure_reason = ?, site_url = ?, updated_at = unixepoch(), started_at = COALESCE(?, started_at), finished_at = COALESCE(?, finished_at)
 		WHERE id = ?
 		RETURNING id, app_id, user_id, status, trigger_type, COALESCE(commit_sha, ''), COALESCE(commit_message, ''), COALESCE(commit_author, ''),
-			COALESCE(branch, ''), COALESCE(site_url, ''), COALESCE(failure_reason, ''), COALESCE(correlation_id, ''), COALESCE(release_version_id, 0), created_at, updated_at,
+			COALESCE(branch, ''), COALESCE(site_url, ''), COALESCE(failure_reason, ''), COALESCE(failure_category, ''), COALESCE(retryable, 0), COALESCE(correlation_id, ''), COALESCE(release_version_id, 0), created_at, updated_at,
 			COALESCE(started_at, 0), COALESCE(finished_at, 0)
 	`, status, nullIfEmpty(reason), nullIfEmpty(siteURL), started, finished, deploymentID)
 
 	var dep Deployment
-	if err := row.Scan(&dep.ID, &dep.AppID, &dep.UserID, &dep.Status, &dep.TriggerType, &dep.CommitSHA, &dep.CommitMessage, &dep.CommitAuthor,
-		&dep.Branch, &dep.SiteURL, &dep.FailureReason, &dep.CorrelationID, &dep.ReleaseID, &dep.CreatedAt, &dep.UpdatedAt, &dep.StartedAt, &dep.FinishedAt); err != nil {
+	if err := scanDeployment(row, &dep); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return Deployment{}, ErrNotFound
 		}
@@ -350,7 +397,7 @@ func (s *Store) ListRecentDeploymentsByAppForUser(ctx context.Context, appID, us
 
 	rows, err := s.db.QueryContext(ctx, `
 		SELECT id, app_id, user_id, status, trigger_type, COALESCE(commit_sha, ''), COALESCE(commit_message, ''), COALESCE(commit_author, ''),
-			COALESCE(branch, ''), COALESCE(site_url, ''), COALESCE(failure_reason, ''), COALESCE(correlation_id, ''), COALESCE(release_version_id, 0), created_at, updated_at,
+			COALESCE(branch, ''), COALESCE(site_url, ''), COALESCE(failure_reason, ''), COALESCE(failure_category, ''), COALESCE(retryable, 0), COALESCE(correlation_id, ''), COALESCE(release_version_id, 0), created_at, updated_at,
 			COALESCE(started_at, 0), COALESCE(finished_at, 0)
 		FROM deployments
 		WHERE app_id = ? AND user_id = ?
@@ -365,13 +412,48 @@ func (s *Store) ListRecentDeploymentsByAppForUser(ctx context.Context, appID, us
 	out := make([]Deployment, 0)
 	for rows.Next() {
 		var dep Deployment
-		if err := rows.Scan(&dep.ID, &dep.AppID, &dep.UserID, &dep.Status, &dep.TriggerType, &dep.CommitSHA, &dep.CommitMessage, &dep.CommitAuthor,
-			&dep.Branch, &dep.SiteURL, &dep.FailureReason, &dep.CorrelationID, &dep.ReleaseID, &dep.CreatedAt, &dep.UpdatedAt, &dep.StartedAt, &dep.FinishedAt); err != nil {
+		if err := scanDeployment(rows, &dep); err != nil {
 			return nil, err
 		}
 		out = append(out, dep)
 	}
 	return out, rows.Err()
+}
+
+func (s *Store) UpdateDeploymentOutcome(ctx context.Context, deploymentID int64, status, reason, category string, retryable bool, siteURL string, startedAt, finishedAt int64) (Deployment, error) {
+	var started any
+	var finished any
+	if startedAt > 0 {
+		started = startedAt
+	}
+	if finishedAt > 0 {
+		finished = finishedAt
+	}
+
+	row := s.db.QueryRowContext(ctx, `
+		UPDATE deployments
+		SET status = ?,
+			failure_reason = ?,
+			failure_category = ?,
+			retryable = ?,
+			site_url = ?,
+			updated_at = unixepoch(),
+			started_at = COALESCE(?, started_at),
+			finished_at = COALESCE(?, finished_at)
+		WHERE id = ?
+		RETURNING id, app_id, user_id, status, trigger_type, COALESCE(commit_sha, ''), COALESCE(commit_message, ''), COALESCE(commit_author, ''),
+			COALESCE(branch, ''), COALESCE(site_url, ''), COALESCE(failure_reason, ''), COALESCE(failure_category, ''), COALESCE(retryable, 0), COALESCE(correlation_id, ''), COALESCE(release_version_id, 0),
+			created_at, updated_at, COALESCE(started_at, 0), COALESCE(finished_at, 0)
+	`, status, nullIfEmpty(reason), nullIfEmpty(category), boolToInt(retryable), nullIfEmpty(siteURL), started, finished, deploymentID)
+
+	var dep Deployment
+	if err := scanDeployment(row, &dep); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return Deployment{}, ErrNotFound
+		}
+		return Deployment{}, err
+	}
+	return dep, nil
 }
 
 func (s *Store) CreateReleaseVersion(ctx context.Context, in CreateReleaseVersionInput) (ReleaseVersion, error) {
@@ -944,6 +1026,213 @@ func (s *Store) ClaimWebhookDelivery(ctx context.Context, appID int64, deliveryI
 		return false, fmt.Errorf("insert webhook delivery: %w", err)
 	}
 	return true, nil
+}
+
+func (s *Store) CreateDeploymentJob(ctx context.Context, in CreateDeploymentJobInput) (DeploymentJob, error) {
+	maxAttempts := in.MaxAttempts
+	if maxAttempts <= 0 {
+		maxAttempts = 3
+	}
+
+	row := s.db.QueryRowContext(ctx, `
+		INSERT INTO deployment_jobs (
+			deployment_id, app_id, user_id, status, attempt_count, max_attempts, next_attempt_at, created_at, updated_at
+		) VALUES (?, ?, ?, 'queued', 0, ?, unixepoch(), unixepoch(), unixepoch())
+		RETURNING id, deployment_id, app_id, user_id, status, attempt_count, max_attempts, next_attempt_at,
+			COALESCE(last_error, ''), COALESCE(error_category, ''), COALESCE(claimed_by, ''),
+			created_at, updated_at, COALESCE(started_at, 0), COALESCE(finished_at, 0)
+	`, in.DeploymentID, in.AppID, in.UserID, maxAttempts)
+
+	var job DeploymentJob
+	if err := scanDeploymentJob(row, &job); err != nil {
+		return DeploymentJob{}, err
+	}
+	return job, nil
+}
+
+func (s *Store) GetDeploymentJobByDeploymentID(ctx context.Context, deploymentID int64) (DeploymentJob, error) {
+	row := s.db.QueryRowContext(ctx, `
+		SELECT id, deployment_id, app_id, user_id, status, attempt_count, max_attempts, next_attempt_at,
+			COALESCE(last_error, ''), COALESCE(error_category, ''), COALESCE(claimed_by, ''),
+			created_at, updated_at, COALESCE(started_at, 0), COALESCE(finished_at, 0)
+		FROM deployment_jobs
+		WHERE deployment_id = ?
+	`, deploymentID)
+
+	var job DeploymentJob
+	if err := scanDeploymentJob(row, &job); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return DeploymentJob{}, ErrNotFound
+		}
+		return DeploymentJob{}, err
+	}
+	return job, nil
+}
+
+func (s *Store) ListActiveDeploymentJobsByAppForUser(ctx context.Context, appID, userID int64) ([]DeploymentJob, error) {
+	rows, err := s.db.QueryContext(ctx, `
+		SELECT j.id, j.deployment_id, j.app_id, j.user_id, j.status, j.attempt_count, j.max_attempts, j.next_attempt_at,
+			COALESCE(j.last_error, ''), COALESCE(j.error_category, ''), COALESCE(j.claimed_by, ''),
+			j.created_at, j.updated_at, COALESCE(j.started_at, 0), COALESCE(j.finished_at, 0)
+		FROM deployment_jobs j
+		JOIN apps a ON a.id = j.app_id
+		WHERE j.app_id = ? AND a.user_id = ? AND j.status IN ('queued', 'running', 'retrying')
+		ORDER BY j.created_at ASC, j.id ASC
+	`, appID, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	out := make([]DeploymentJob, 0)
+	for rows.Next() {
+		var job DeploymentJob
+		if err := scanDeploymentJob(rows, &job); err != nil {
+			return nil, err
+		}
+		out = append(out, job)
+	}
+	return out, rows.Err()
+}
+
+func (s *Store) ClaimNextRunnableDeploymentJob(ctx context.Context, workerID string) (DeploymentJob, error) {
+	row := s.db.QueryRowContext(ctx, `
+		UPDATE deployment_jobs
+		SET status = 'running',
+			attempt_count = attempt_count + 1,
+			claimed_by = ?,
+			updated_at = unixepoch(),
+			started_at = unixepoch()
+		WHERE id = (
+			SELECT j.id
+			FROM deployment_jobs j
+			WHERE j.status IN ('queued', 'retrying')
+				AND j.next_attempt_at <= unixepoch()
+				AND j.attempt_count < j.max_attempts
+				AND NOT EXISTS (
+					SELECT 1
+					FROM deployment_jobs running
+					WHERE running.app_id = j.app_id
+						AND running.status = 'running'
+						AND running.id != j.id
+				)
+			ORDER BY j.next_attempt_at ASC, j.id ASC
+			LIMIT 1
+		)
+		RETURNING id, deployment_id, app_id, user_id, status, attempt_count, max_attempts, next_attempt_at,
+			COALESCE(last_error, ''), COALESCE(error_category, ''), COALESCE(claimed_by, ''),
+			created_at, updated_at, COALESCE(started_at, 0), COALESCE(finished_at, 0)
+	`, strings.TrimSpace(workerID))
+
+	var job DeploymentJob
+	if err := scanDeploymentJob(row, &job); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return DeploymentJob{}, ErrNotFound
+		}
+		if strings.Contains(strings.ToLower(err.Error()), "unique constraint failed") {
+			return DeploymentJob{}, ErrNotFound
+		}
+		return DeploymentJob{}, err
+	}
+	return job, nil
+}
+
+func (s *Store) MarkDeploymentJobRetry(ctx context.Context, jobID int64, nextAttemptAt int64, errMsg, category string) (DeploymentJob, error) {
+	row := s.db.QueryRowContext(ctx, `
+		UPDATE deployment_jobs
+		SET status = 'retrying',
+			next_attempt_at = ?,
+			last_error = ?,
+			error_category = ?,
+			updated_at = unixepoch(),
+			finished_at = NULL
+		WHERE id = ?
+		RETURNING id, deployment_id, app_id, user_id, status, attempt_count, max_attempts, next_attempt_at,
+			COALESCE(last_error, ''), COALESCE(error_category, ''), COALESCE(claimed_by, ''),
+			created_at, updated_at, COALESCE(started_at, 0), COALESCE(finished_at, 0)
+	`, nextAttemptAt, nullIfEmpty(errMsg), nullIfEmpty(category), jobID)
+
+	var job DeploymentJob
+	if err := scanDeploymentJob(row, &job); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return DeploymentJob{}, ErrNotFound
+		}
+		return DeploymentJob{}, err
+	}
+	return job, nil
+}
+
+func (s *Store) MarkDeploymentJobFailed(ctx context.Context, jobID int64, errMsg, category string) (DeploymentJob, error) {
+	row := s.db.QueryRowContext(ctx, `
+		UPDATE deployment_jobs
+		SET status = 'failed',
+			last_error = ?,
+			error_category = ?,
+			updated_at = unixepoch(),
+			finished_at = unixepoch()
+		WHERE id = ?
+		RETURNING id, deployment_id, app_id, user_id, status, attempt_count, max_attempts, next_attempt_at,
+			COALESCE(last_error, ''), COALESCE(error_category, ''), COALESCE(claimed_by, ''),
+			created_at, updated_at, COALESCE(started_at, 0), COALESCE(finished_at, 0)
+	`, nullIfEmpty(errMsg), nullIfEmpty(category), jobID)
+
+	var job DeploymentJob
+	if err := scanDeploymentJob(row, &job); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return DeploymentJob{}, ErrNotFound
+		}
+		return DeploymentJob{}, err
+	}
+	return job, nil
+}
+
+func (s *Store) MarkDeploymentJobSucceeded(ctx context.Context, jobID int64) (DeploymentJob, error) {
+	row := s.db.QueryRowContext(ctx, `
+		UPDATE deployment_jobs
+		SET status = 'succeeded',
+			last_error = NULL,
+			error_category = NULL,
+			updated_at = unixepoch(),
+			finished_at = unixepoch()
+		WHERE id = ?
+		RETURNING id, deployment_id, app_id, user_id, status, attempt_count, max_attempts, next_attempt_at,
+			COALESCE(last_error, ''), COALESCE(error_category, ''), COALESCE(claimed_by, ''),
+			created_at, updated_at, COALESCE(started_at, 0), COALESCE(finished_at, 0)
+	`, jobID)
+
+	var job DeploymentJob
+	if err := scanDeploymentJob(row, &job); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return DeploymentJob{}, ErrNotFound
+		}
+		return DeploymentJob{}, err
+	}
+	return job, nil
+}
+
+func (s *Store) CreateDeploymentRollbackPayload(ctx context.Context, deploymentID, fromReleaseID, targetReleaseID int64, reason string) error {
+	_, err := s.db.ExecContext(ctx, `
+		INSERT INTO deployment_rollback_payloads (deployment_id, from_release_id, target_release_id, reason, created_at)
+		VALUES (?, ?, ?, ?, unixepoch())
+	`, deploymentID, fromReleaseID, targetReleaseID, nullIfEmpty(reason))
+	return err
+}
+
+func (s *Store) GetDeploymentRollbackPayload(ctx context.Context, deploymentID int64) (DeploymentRollbackPayload, error) {
+	row := s.db.QueryRowContext(ctx, `
+		SELECT deployment_id, from_release_id, target_release_id, COALESCE(reason, ''), created_at
+		FROM deployment_rollback_payloads
+		WHERE deployment_id = ?
+	`, deploymentID)
+
+	var payload DeploymentRollbackPayload
+	if err := row.Scan(&payload.DeploymentID, &payload.FromReleaseID, &payload.TargetReleaseID, &payload.Reason, &payload.CreatedAt); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return DeploymentRollbackPayload{}, ErrNotFound
+		}
+		return DeploymentRollbackPayload{}, err
+	}
+	return payload, nil
 }
 
 func nullIfEmpty(v string) any {
