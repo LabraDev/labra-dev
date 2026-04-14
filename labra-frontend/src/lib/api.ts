@@ -26,11 +26,41 @@ export type Deployment = {
 	branch?: string;
 	site_url?: string;
 	failure_reason?: string;
+	failure_category?: string;
+	retryable?: boolean;
 	release_id?: number;
 	created_at: number;
 	updated_at: number;
 	started_at?: number;
 	finished_at?: number;
+};
+
+export type DeploymentJob = {
+	id: number;
+	deployment_id: number;
+	app_id: number;
+	user_id: number;
+	status: string;
+	attempt_count: number;
+	max_attempts: number;
+	next_attempt_at: number;
+	last_error?: string;
+	error_category?: string;
+	claimed_by?: string;
+	created_at: number;
+	updated_at: number;
+	started_at?: number;
+	finished_at?: number;
+};
+
+export type DeploymentQueueStatus = {
+	deployment_id: number;
+	job: DeploymentJob;
+	next_retry_in_seconds: number;
+	worker?: string;
+	queue_poll_interval_ms: number;
+	worker_concurrency: number;
+	configured_max_attempts: number;
 };
 
 export type DeploymentLog = {

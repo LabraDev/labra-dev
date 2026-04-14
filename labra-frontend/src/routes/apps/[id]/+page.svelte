@@ -201,6 +201,21 @@
 		return `${Math.max(2, Math.round((value / total) * 100))}%`;
 	}
 
+	function deployStateMessage(dep?: Deployment | null): string {
+		if (!dep) return 'n/a';
+		if (dep.status === 'queued' && dep.retryable && dep.failure_reason) {
+			return `retry queued: ${dep.failure_reason}`;
+		}
+		if (dep.status === 'queued') return 'waiting in queue';
+		if (dep.status === 'running') return 'worker is executing';
+		if (dep.status === 'failed') {
+			if (dep.failure_category) return `${dep.failure_category}: ${dep.failure_reason || 'failed'}`;
+			return dep.failure_reason || 'failed';
+		}
+		if (dep.status === 'succeeded') return 'completed successfully';
+		return dep.status;
+	}
+
 	async function createEnvVar() {
 		envActionPending = true;
 		envActionError = '';
@@ -363,11 +378,12 @@
 				<p><strong>Current URL:</strong> {health?.current_url || latest?.site_url || app.site_url || 'n/a'}</p>
 				<p><strong>Current Release:</strong> {releaseLabel(currentReleaseID)}</p>
 			</article>
-			<article>
-				<h2>Latest Deploy</h2>
-				<p><strong>Status:</strong> {latest?.status || 'n/a'}</p>
-				<p><strong>Trigger:</strong> {latest?.trigger_type || 'n/a'}</p>
-				<p><strong>Release:</strong> {releaseLabel(latest?.release_id)}</p>
+				<article>
+					<h2>Latest Deploy</h2>
+					<p><strong>Status:</strong> {latest?.status || 'n/a'}</p>
+					<p><strong>State:</strong> {deployStateMessage(latest)}</p>
+					<p><strong>Trigger:</strong> {latest?.trigger_type || 'n/a'}</p>
+					<p><strong>Release:</strong> {releaseLabel(latest?.release_id)}</p>
 				<p>
 					<strong>Commit:</strong> {shortSHA(latest?.commit_sha)} {latest?.commit_author ? `by ${latest.commit_author}` : ''}
 				</p>
@@ -406,11 +422,14 @@
 						</tr>
 					</thead>
 					<tbody>
-						{#each history.deployments as dep}
-							<tr>
-								<td>{dep.id}</td>
-								<td>{dep.status}</td>
-								<td>{dep.trigger_type}</td>
+							{#each history.deployments as dep}
+								<tr>
+									<td>{dep.id}</td>
+									<td>
+										<div>{dep.status}</div>
+										<div class="muted small">{deployStateMessage(dep)}</div>
+									</td>
+									<td>{dep.trigger_type}</td>
 								<td>{releaseLabel(dep.release_id)}</td>
 								<td title={dep.commit_message || ''}>{shortSHA(dep.commit_sha)}</td>
 								<td>{prettyDate(dep.updated_at)}</td>
@@ -938,6 +957,9 @@
 	}
 	.muted {
 		opacity: 0.75;
+	}
+	.small {
+		font-size: 0.82rem;
 	}
 	@media (max-width: 900px) {
 		.create-env,
