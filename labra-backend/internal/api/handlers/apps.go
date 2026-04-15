@@ -78,6 +78,9 @@ func CreateAppHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	_ = ensureAppInfraOutput(r.Context(), app)
+	_ = recordAppConfigVersion(r.Context(), app, "create")
+
 	writeJSON(w, http.StatusCreated, app)
 }
 
@@ -182,6 +185,9 @@ func PatchAppHandler(w http.ResponseWriter, r *http.Request) {
 		writeJSONError(w, http.StatusInternalServerError, "failed to update app")
 		return
 	}
+
+	_ = ensureAppInfraOutput(r.Context(), app)
+	_ = recordAppConfigVersion(r.Context(), app, "patch")
 
 	writeJSON(w, http.StatusOK, app)
 }

@@ -11,4 +11,6 @@ func Apps(s *fuego.Server) {
 	fuego.GetStd(s, "/v1/apps", withAuth(handlers.ListAppsHandler))
 	fuego.GetStd(s, "/v1/apps/{id}", withAuth(handlers.GetAppHandler))
 	fuego.PatchStd(s, "/v1/apps/{id}", withAuth(handlers.PatchAppHandler))
+	fuego.GetStd(s, "/v1/apps/{id}/config-history", withAuth(handlers.GetAppConfigHistoryHandler))
+	fuego.GetStd(s, "/v1/apps/{id}/infra-outputs", withAuth(handlers.GetAppInfraOutputsHandler))
 }
