@@ -100,6 +100,80 @@ func (s *Store) UpdateAppForUser(ctx context.Context, appID, userID int64, in Up
 	return app, nil
 }
 
+func (s *Store) CreateAppConfigVersion(ctx context.Context, in CreateAppConfigVersionInput) (AppConfigVersion, error) {
+	row := s.db.QueryRowContext(ctx, `
+		INSERT INTO app_config_versions (app_id, user_id, source, config_json, created_at)
+		VALUES (?, ?, ?, ?, unixepoch())
+		RETURNING id, app_id, user_id, source, config_json, created_at
+	`, in.AppID, in.UserID, strings.TrimSpace(in.Source), strings.TrimSpace(in.ConfigJSON))
+
+	var out AppConfigVersion
+	if err := row.Scan(&out.ID, &out.AppID, &out.UserID, &out.Source, &out.ConfigJSON, &out.CreatedAt); err != nil {
+		return AppConfigVersion{}, err
+	}
+	return out, nil
+}
+
+func (s *Store) ListAppConfigVersionsByAppForUser(ctx context.Context, appID, userID int64) ([]AppConfigVersion, error) {
+	rows, err := s.db.QueryContext(ctx, `
+		SELECT id, app_id, user_id, source, config_json, created_at
+		FROM app_config_versions
+		WHERE app_id = ? AND user_id = ?
+		ORDER BY created_at DESC, id DESC
+	`, appID, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	out := make([]AppConfigVersion, 0)
+	for rows.Next() {
+		var cfg AppConfigVersion
+		if err := rows.Scan(&cfg.ID, &cfg.AppID, &cfg.UserID, &cfg.Source, &cfg.ConfigJSON, &cfg.CreatedAt); err != nil {
+			return nil, err
+		}
+		out = append(out, cfg)
+	}
+	return out, rows.Err()
+}
+
+func (s *Store) UpsertAppInfraOutput(ctx context.Context, in UpsertAppInfraOutputInput) (AppInfraOutput, error) {
+	row := s.db.QueryRowContext(ctx, `
+		INSERT INTO app_infra_outputs (app_id, user_id, bucket_name, distribution_id, site_url, updated_at)
+		VALUES (?, ?, ?, ?, ?, unixepoch())
+		ON CONFLICT(app_id) DO UPDATE SET
+			user_id = excluded.user_id,
+			bucket_name = excluded.bucket_name,
+			distribution_id = excluded.distribution_id,
+			site_url = excluded.site_url,
+			updated_at = unixepoch()
+		RETURNING app_id, user_id, bucket_name, distribution_id, COALESCE(site_url, ''), updated_at
+	`, in.AppID, in.UserID, strings.TrimSpace(in.BucketName), strings.TrimSpace(in.DistributionID), nullIfEmpty(in.SiteURL))
+
+	var out AppInfraOutput
+	if err := row.Scan(&out.AppID, &out.UserID, &out.BucketName, &out.DistributionID, &out.SiteURL, &out.UpdatedAt); err != nil {
+		return AppInfraOutput{}, err
+	}
+	return out, nil
+}
+
+func (s *Store) GetAppInfraOutputByAppForUser(ctx context.Context, appID, userID int64) (AppInfraOutput, error) {
+	row := s.db.QueryRowContext(ctx, `
+		SELECT app_id, user_id, bucket_name, distribution_id, COALESCE(site_url, ''), updated_at
+		FROM app_infra_outputs
+		WHERE app_id = ? AND user_id = ?
+	`, appID, userID)
+
+	var out AppInfraOutput
+	if err := row.Scan(&out.AppID, &out.UserID, &out.BucketName, &out.DistributionID, &out.SiteURL, &out.UpdatedAt); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return AppInfraOutput{}, ErrNotFound
+		}
+		return AppInfraOutput{}, err
+	}
+	return out, nil
+}
+
 func (s *Store) ListAutoDeployAppsByRepo(ctx context.Context, repoFullName string) ([]App, error) {
 	rows, err := s.db.QueryContext(ctx, `
 		SELECT id, user_id, name, repo_full_name, branch, build_type, output_dir, COALESCE(root_dir, ''), COALESCE(site_url, ''), auto_deploy_enabled, created_at, updated_at

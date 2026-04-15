@@ -15,6 +15,24 @@ type App struct {
 	UpdatedAt         int64  `json:"updated_at"`
 }
 
+type AppInfraOutput struct {
+	AppID          int64  `json:"app_id"`
+	UserID         int64  `json:"user_id"`
+	BucketName     string `json:"bucket_name"`
+	DistributionID string `json:"distribution_id"`
+	SiteURL        string `json:"site_url,omitempty"`
+	UpdatedAt      int64  `json:"updated_at"`
+}
+
+type AppConfigVersion struct {
+	ID         int64  `json:"id"`
+	AppID      int64  `json:"app_id"`
+	UserID     int64  `json:"user_id"`
+	Source     string `json:"source"`
+	ConfigJSON string `json:"config_json"`
+	CreatedAt  int64  `json:"created_at"`
+}
+
 type Deployment struct {
 	ID            int64  `json:"id"`
 	AppID         int64  `json:"app_id"`
@@ -93,6 +111,14 @@ type CreateAppInput struct {
 	AutoDeployEnabled bool
 }
 
+type UpsertAppInfraOutputInput struct {
+	AppID          int64
+	UserID         int64
+	BucketName     string
+	DistributionID string
+	SiteURL        string
+}
+
 type UpdateAppInput struct {
 	Name              string
 	Branch            string
@@ -155,4 +181,11 @@ type CreateAuthSessionInput struct {
 	SessionID string
 	UserID    int64
 	ExpiresAt int64
+}
+
+type CreateAppConfigVersionInput struct {
+	AppID      int64
+	UserID     int64
+	Source     string
+	ConfigJSON string
 }
