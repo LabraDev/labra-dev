@@ -1,5 +1,5 @@
 output "resource_prefix" {
-  value =  local.resource_prefix
+  value = local.resource_prefix
 }
 
 output "tags" {
@@ -48,6 +48,54 @@ output "static_release_prefix" {
 
 output "static_alarm_names" {
   value = module.static_runtime.alarm_names
+}
+
+output "kms_key_arn" {
+  value = try(module.kms_baseline[0].kms_key_arn, null)
+}
+
+output "log_group_names" {
+  value = try(module.logging_baseline[0].log_group_names, [])
+}
+
+output "vpc_id" {
+  value = try(module.vpc_baseline[0].vpc_id, null)
+}
+
+output "vpc_public_subnet_ids" {
+  value = try(module.vpc_baseline[0].public_subnet_ids, [])
+}
+
+output "vpc_private_subnet_ids" {
+  value = try(module.vpc_baseline[0].private_subnet_ids, [])
+}
+
+output "frontend_security_group_id" {
+  value = try(module.security_groups_baseline[0].frontend_security_group_id, null)
+}
+
+output "api_security_group_id" {
+  value = try(module.security_groups_baseline[0].api_security_group_id, null)
+}
+
+output "internal_security_group_id" {
+  value = try(module.security_groups_baseline[0].internal_security_group_id, null)
+}
+
+output "backend_service_role_arn" {
+  value = try(module.iam_baseline[0].backend_service_role_arn, null)
+}
+
+output "deploy_runner_role_arn" {
+  value = try(module.iam_baseline[0].deploy_runner_role_arn, null)
+}
+
+output "github_actions_role_arn" {
+  value = try(module.iam_baseline[0].github_actions_role_arn, null)
+}
+
+output "platform_secret_arn" {
+  value = try(module.secrets_baseline[0].platform_secret_arn, null)
 }
 
 output "runner_contract" {

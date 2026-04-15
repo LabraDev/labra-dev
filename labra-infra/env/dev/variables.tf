@@ -28,6 +28,11 @@ variable "owner" {
   default = "labra-infra"
 }
 
+variable "cost_center" {
+  type    = string
+  default = "cpsc465"
+}
+
 variable "extra_tags" {
   type    = map(string)
   default = {}
@@ -35,12 +40,12 @@ variable "extra_tags" {
 
 variable "roadmap_phase" {
   type    = string
-  default = "Phase 4"
+  default = "Phase 0"
 }
 
 variable "roadmap_version" {
   type    = string
-  default = "Ver 1.0"
+  default = "Ver 0.1"
 }
 
 variable "bootstrap_state_backend" {
@@ -60,6 +65,66 @@ variable "state_lock_table_name" {
 variable "state_bucket_force_destroy" {
   type    = bool
   default = false
+}
+
+variable "enable_foundation_modules" {
+  type    = bool
+  default = true
+}
+
+variable "vpc_cidr" {
+  type    = string
+  default = "10.42.0.0/16"
+}
+
+variable "vpc_az_count" {
+  type    = number
+  default = 2
+}
+
+variable "vpc_enable_nat_gateway" {
+  type    = bool
+  default = false
+}
+
+variable "kms_enable_key_rotation" {
+  type    = bool
+  default = true
+}
+
+variable "kms_deletion_window_in_days" {
+  type    = number
+  default = 7
+}
+
+variable "logging_retention_days" {
+  type    = number
+  default = 14
+}
+
+variable "logging_group_suffixes" {
+  type    = list(string)
+  default = ["api", "deploy-runner", "webhook", "auth"]
+}
+
+variable "secrets_create_placeholder_secret" {
+  type    = bool
+  default = true
+}
+
+variable "iam_enable_github_oidc_role" {
+  type    = bool
+  default = false
+}
+
+variable "iam_github_oidc_provider_arn" {
+  type    = string
+  default = null
+}
+
+variable "iam_github_repository" {
+  type    = string
+  default = null
 }
 
 variable "app_name" {
