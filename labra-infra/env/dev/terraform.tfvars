@@ -1,12 +1,14 @@
 state_bucket_name     = "labra-infra-dev-tfstate-974646089985"
 state_lock_table_name = "labra-infra-dev-platform-terraform-locks"
 
-roadmap_phase   = "Phase 0"
-roadmap_version = "Ver 0.1"
+roadmap_phase   = "Phase 2"
+roadmap_version = "Ver 0.3"
 cost_center     = "cpsc465"
 
-enable_foundation_modules = true
-vpc_enable_nat_gateway    = false
+enable_foundation_modules    = true
+vpc_enable_nat_gateway       = false
+enable_cognito_baseline      = true
+enable_control_plane_cluster = true
 
 # Enable after creating an IAM OIDC provider in your AWS account.
 iam_enable_github_oidc_role = false

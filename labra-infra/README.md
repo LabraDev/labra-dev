@@ -10,6 +10,10 @@ Sprint 1 infra baseline now includes:
 - `secrets-baseline` (Secrets Manager envelope)
 - `static_runtime` (S3 + CloudFront static hosting)
 
+Sprint 2 adds:
+- `cognito-baseline` (user pool, app client, hosted domain)
+- `control-plane-cluster` (ECS cluster + service discovery namespace + log groups for control-api/deploy-orchestrator/webhook-ingestor)
+
 ## Files we use most
 - `env/dev/main.tf` composition
 - `env/dev/variables.tf` inputs for this env

@@ -98,6 +98,34 @@ output "platform_secret_arn" {
   value = try(module.secrets_baseline[0].platform_secret_arn, null)
 }
 
+output "cognito_user_pool_id" {
+  value = try(module.cognito_baseline[0].user_pool_id, null)
+}
+
+output "cognito_app_client_id" {
+  value = try(module.cognito_baseline[0].app_client_id, null)
+}
+
+output "cognito_domain" {
+  value = try(module.cognito_baseline[0].domain, null)
+}
+
+output "control_plane_cluster_name" {
+  value = try(module.control_plane_cluster[0].cluster_name, null)
+}
+
+output "control_plane_cluster_arn" {
+  value = try(module.control_plane_cluster[0].cluster_arn, null)
+}
+
+output "control_plane_service_namespace_id" {
+  value = try(module.control_plane_cluster[0].service_discovery_namespace_id, null)
+}
+
+output "control_plane_service_log_groups" {
+  value = try(module.control_plane_cluster[0].service_log_group_names, [])
+}
+
 output "runner_contract" {
   value = {
     enabled                 = var.runner_enabled

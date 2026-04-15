@@ -102,6 +102,28 @@ module "secrets_baseline" {
   tags                      = local.tags
 }
 
+module "cognito_baseline" {
+  count  = var.enable_cognito_baseline ? 1 : 0
+  source = "../../modules/cognito-baseline"
+
+  name_prefix   = local.resource_prefix
+  callback_urls = var.cognito_callback_urls
+  logout_urls   = var.cognito_logout_urls
+  create_domain = var.cognito_create_domain
+  domain_prefix = var.cognito_domain_prefix
+  tags          = local.tags
+}
+
+module "control_plane_cluster" {
+  count  = var.enable_control_plane_cluster && var.enable_foundation_modules ? 1 : 0
+  source = "../../modules/control-plane-cluster"
+
+  name_prefix        = local.resource_prefix
+  vpc_id             = module.vpc_baseline[0].vpc_id
+  private_subnet_ids = module.vpc_baseline[0].private_subnet_ids
+  tags               = local.tags
+}
+
 module "static_runtime" {
   source = "../../modules/static_runtime"
 

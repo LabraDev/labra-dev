@@ -112,6 +112,36 @@ variable "secrets_create_placeholder_secret" {
   default = true
 }
 
+variable "enable_cognito_baseline" {
+  type    = bool
+  default = true
+}
+
+variable "cognito_callback_urls" {
+  type    = list(string)
+  default = ["http://localhost:5173/dashboard"]
+}
+
+variable "cognito_logout_urls" {
+  type    = list(string)
+  default = ["http://localhost:5173/login"]
+}
+
+variable "cognito_create_domain" {
+  type    = bool
+  default = true
+}
+
+variable "cognito_domain_prefix" {
+  type    = string
+  default = null
+}
+
+variable "enable_control_plane_cluster" {
+  type    = bool
+  default = true
+}
+
 variable "iam_enable_github_oidc_role" {
   type    = bool
   default = false
