@@ -39,6 +39,33 @@ export type DeploymentLog = {
 	created_at: number;
 };
 
+export type AIRequestLog = {
+	id: number;
+	user_id: number;
+	deployment_id: number;
+	prompt_version: string;
+	provider: string;
+	model: string;
+	input_redacted: boolean;
+	fallback_used: boolean;
+	status: string;
+	input_excerpt?: string;
+	output_excerpt?: string;
+	created_at: number;
+};
+
+export type AIDeployInsightResponse = {
+	deployment_id: number;
+	insight: string;
+	source: string;
+	model: string;
+	prompt_version: string;
+	fallback_used: boolean;
+	confidence: string;
+	limitations: string;
+	request_log: AIRequestLog;
+};
+
 export type ProfileResponse = {
 	user: {
 		id: number;
@@ -146,6 +173,20 @@ export async function apiPOST<T>(
 ): Promise<T> {
 	const res = await fetch(`${backendBaseURL}${path}`, {
 		method: 'POST',
+		headers: buildHeaders(headers, userID),
+		body: JSON.stringify(body)
+	});
+	return parseOrThrow<T>(res);
+}
+
+export async function apiPATCH<T>(
+	path: string,
+	body: unknown,
+	headers?: Record<string, string>,
+	userID?: string
+): Promise<T> {
+	const res = await fetch(`${backendBaseURL}${path}`, {
+		method: 'PATCH',
 		headers: buildHeaders(headers, userID),
 		body: JSON.stringify(body)
 	});

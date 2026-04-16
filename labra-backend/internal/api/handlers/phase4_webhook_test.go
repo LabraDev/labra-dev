@@ -12,6 +12,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	"labra-backend/internal/api/store"
 
@@ -20,7 +21,6 @@ import (
 
 func TestGitHubWebhookRejectsInvalidSignature(t *testing.T) {
 	db := setupPhase4TestDB(t)
-	defer db.Close()
 
 	createTestApp(t, 1, "demo", "owner/repo", "main")
 
@@ -45,7 +45,6 @@ func TestGitHubWebhookRejectsInvalidSignature(t *testing.T) {
 
 func TestGitHubWebhookIgnoresWrongBranch(t *testing.T) {
 	db := setupPhase4TestDB(t)
-	defer db.Close()
 
 	createTestApp(t, 1, "demo", "owner/repo", "main")
 
@@ -77,7 +76,6 @@ func TestGitHubWebhookIgnoresWrongBranch(t *testing.T) {
 
 func TestGitHubWebhookDedupeAndAutoTrigger(t *testing.T) {
 	db := setupPhase4TestDB(t)
-	defer db.Close()
 
 	createTestApp(t, 1, "demo", "owner/repo", "main")
 
@@ -126,8 +124,7 @@ func TestGitHubWebhookDedupeAndAutoTrigger(t *testing.T) {
 }
 
 func TestGetAppDeploysHandlerReturnsWebhookMetadata(t *testing.T) {
-	db := setupPhase4TestDB(t)
-	defer db.Close()
+	setupPhase4TestDB(t)
 
 	app := createTestApp(t, 1, "demo", "owner/repo", "main")
 
@@ -189,6 +186,18 @@ func setupPhase4TestDB(t *testing.T) *sql.DB {
 		t.Fatalf("open sqlite: %v", err)
 	}
 
+	prevStore := appStore
+	prevSecret := githubWebhookSecret
+	prevAsync := runDeploymentAsync
+	prevNow := webhookNowUnix
+	t.Cleanup(func() {
+		appStore = prevStore
+		githubWebhookSecret = prevSecret
+		runDeploymentAsync = prevAsync
+		webhookNowUnix = prevNow
+		_ = db.Close()
+	})
+
 	schema := `
 	CREATE TABLE IF NOT EXISTS apps (
 	  id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -247,6 +256,7 @@ func setupPhase4TestDB(t *testing.T) *sql.DB {
 	InitAppStore(db)
 	InitWebhook("test-secret")
 	runDeploymentAsync = false
+	webhookNowUnix = func() int64 { return time.Now().Unix() }
 
 	return db
 }

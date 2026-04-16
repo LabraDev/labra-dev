@@ -25,7 +25,7 @@ resource "aws_internet_gateway" "baseline" {
 }
 
 resource "aws_subnet" "public" {
-  for_each = { for idx, az in locals.azs : az => idx }
+  for_each = { for idx, az in local.azs : az => idx }
 
   vpc_id                  = aws_vpc.baseline.id
   cidr_block              = cidrsubnet(var.vpc_cidr, 8, each.value)
@@ -39,7 +39,7 @@ resource "aws_subnet" "public" {
 }
 
 resource "aws_subnet" "private" {
-  for_each = { for idx, az in locals.azs : az => idx }
+  for_each = { for idx, az in local.azs : az => idx }
 
   vpc_id            = aws_vpc.baseline.id
   cidr_block        = cidrsubnet(var.vpc_cidr, 8, each.value + 10)

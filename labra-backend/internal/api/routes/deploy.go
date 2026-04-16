@@ -11,4 +11,6 @@ func Deploy(s *fuego.Server) {
 	fuego.GetStd(s, "/v1/apps/{id}/deploys", withAuth(handlers.GetAppDeploysHandler))
 	fuego.GetStd(s, "/v1/deploys/{id}", withAuth(handlers.GetDeployHandler))
 	fuego.GetStd(s, "/v1/deploys/{id}/logs", withAuth(handlers.GetDeployLogsHandler))
+	fuego.PostStd(s, "/v1/deploys/{id}/cancel", withAuth(handlers.CancelDeployHandler))
+	fuego.PostStd(s, "/v1/deploys/{id}/retry", withAuth(handlers.RetryDeployHandler))
 }

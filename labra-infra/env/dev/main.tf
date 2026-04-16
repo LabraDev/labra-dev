@@ -86,11 +86,14 @@ module "iam_baseline" {
   count  = var.enable_foundation_modules ? 1 : 0
   source = "../../modules/iam-baseline"
 
-  name_prefix              = local.resource_prefix
-  enable_github_oidc_role  = var.iam_enable_github_oidc_role
-  github_oidc_provider_arn = var.iam_github_oidc_provider_arn
-  github_repository        = var.iam_github_repository
-  tags                     = local.tags
+  name_prefix                 = local.resource_prefix
+  enable_github_oidc_role     = var.iam_enable_github_oidc_role
+  create_github_oidc_provider = var.iam_create_github_oidc_provider
+  github_oidc_provider_arn    = var.iam_github_oidc_provider_arn
+  github_oidc_client_ids      = var.iam_github_oidc_client_ids
+  github_oidc_thumbprints     = var.iam_github_oidc_thumbprints
+  github_repository           = var.iam_github_repository
+  tags                        = local.tags
 }
 
 module "secrets_baseline" {
@@ -118,10 +121,133 @@ module "control_plane_cluster" {
   count  = var.enable_control_plane_cluster && var.enable_foundation_modules ? 1 : 0
   source = "../../modules/control-plane-cluster"
 
-  name_prefix        = local.resource_prefix
-  vpc_id             = module.vpc_baseline[0].vpc_id
-  private_subnet_ids = module.vpc_baseline[0].private_subnet_ids
-  tags               = local.tags
+  name_prefix = local.resource_prefix
+  vpc_id      = module.vpc_baseline[0].vpc_id
+  tags        = local.tags
+}
+
+module "ecr_baseline" {
+  count  = var.enable_ecr_baseline ? 1 : 0
+  source = "../../modules/ecr-baseline"
+
+  name_prefix         = local.resource_prefix
+  repositories        = var.ecr_repository_names
+  scan_on_push        = var.ecr_scan_on_push
+  mutable_tags        = var.ecr_mutable_tags
+  max_images_per_repo = var.ecr_max_images_per_repo
+  tags                = local.tags
+}
+
+module "control_plane_services_baseline" {
+  count  = var.enable_control_plane_services_baseline && var.enable_control_plane_cluster && var.enable_foundation_modules ? 1 : 0
+  source = "../../modules/control-plane-services-baseline"
+
+  name_prefix                         = local.resource_prefix
+  cluster_arn                         = module.control_plane_cluster[0].cluster_arn
+  vpc_id                              = module.vpc_baseline[0].vpc_id
+  public_subnet_ids                   = module.vpc_baseline[0].public_subnet_ids
+  private_subnet_ids                  = module.vpc_baseline[0].private_subnet_ids
+  alb_security_group_id               = module.security_groups_baseline[0].frontend_security_group_id
+  api_service_security_group_id       = module.security_groups_baseline[0].api_security_group_id
+  worker_service_security_group_id    = module.security_groups_baseline[0].internal_security_group_id
+  api_container_image                 = var.control_api_container_image
+  deploy_orchestrator_container_image = var.deploy_orchestrator_container_image
+  webhook_ingestor_container_image    = var.webhook_ingestor_container_image
+  api_container_port                  = var.control_api_container_port
+  api_health_check_path               = var.control_api_health_check_path
+  api_desired_count                   = var.control_api_desired_count
+  worker_desired_count                = var.control_plane_worker_desired_count
+  task_cpu                            = var.control_plane_task_cpu
+  task_memory                         = var.control_plane_task_memory
+  assign_public_ip                    = var.control_plane_assign_public_ip
+  create_execution_role               = var.control_plane_create_execution_role
+  execution_role_arn                  = var.control_plane_execution_role_arn
+  task_role_arns = {
+    "control-api"         = try(module.iam_baseline[0].backend_service_role_arn, "")
+    "deploy-orchestrator" = try(module.iam_baseline[0].deploy_runner_role_arn, "")
+    "webhook-ingestor"    = try(module.iam_baseline[0].deploy_runner_role_arn, "")
+  }
+  tags = local.tags
+}
+
+module "metadata_host_baseline" {
+  count  = var.enable_metadata_host_baseline && var.enable_foundation_modules ? 1 : 0
+  source = "../../modules/metadata-host-baseline"
+
+  name_prefix             = local.resource_prefix
+  subnet_id               = module.vpc_baseline[0].private_subnet_ids[0]
+  security_group_ids      = [module.security_groups_baseline[0].internal_security_group_id]
+  instance_type           = var.metadata_host_instance_type
+  root_volume_size_gib    = var.metadata_host_root_volume_size_gib
+  key_name                = var.metadata_host_key_name
+  create_instance_profile = var.metadata_host_create_instance_profile
+  ssm_managed             = var.metadata_host_ssm_managed
+  ami_ssm_parameter       = var.metadata_host_ami_ssm_parameter
+  bootstrap_sqlite        = var.metadata_host_bootstrap_sqlite
+  tags                    = local.tags
+}
+
+module "cloudtrail_baseline" {
+  count  = var.enable_cloudtrail_baseline ? 1 : 0
+  source = "../../modules/cloudtrail-baseline"
+
+  name_prefix                   = local.resource_prefix
+  trail_name                    = var.cloudtrail_name
+  is_multi_region_trail         = var.cloudtrail_is_multi_region_trail
+  include_global_service_events = var.cloudtrail_include_global_service_events
+  enable_log_file_validation    = var.cloudtrail_enable_log_file_validation
+  kms_key_id                    = var.cloudtrail_kms_key_id
+  force_destroy                 = var.cloudtrail_force_destroy
+  tags                          = local.tags
+}
+
+module "waf_regional_baseline" {
+  count  = var.enable_waf_regional_baseline ? 1 : 0
+  source = "../../modules/waf-regional-baseline"
+
+  name_prefix            = local.resource_prefix
+  associate_resource_arn = var.enable_control_plane_services_baseline ? try(module.control_plane_services_baseline[0].alb_arn, null) : null
+  tags                   = local.tags
+}
+
+module "edge_dns_baseline" {
+  count  = var.enable_edge_dns_baseline && trimspace(coalesce(var.edge_dns_hosted_zone_id, "")) != "" ? 1 : 0
+  source = "../../modules/edge-dns-baseline"
+
+  name_prefix                       = local.resource_prefix
+  hosted_zone_id                    = var.edge_dns_hosted_zone_id
+  api_domain_name                   = var.api_domain_name
+  api_alb_dns_name                  = var.enable_control_plane_services_baseline ? try(module.control_plane_services_baseline[0].alb_dns_name, null) : null
+  api_alb_zone_id                   = var.enable_control_plane_services_baseline ? try(module.control_plane_services_baseline[0].alb_zone_id, null) : null
+  create_api_certificate            = var.edge_dns_create_api_certificate
+  frontend_domain_name              = var.frontend_domain_name
+  frontend_distribution_domain_name = module.static_runtime.distribution_domain_name
+  frontend_distribution_zone_id     = module.static_runtime.distribution_hosted_zone_id
+  tags                              = local.tags
+}
+
+module "ai_runtime_baseline" {
+  count  = var.enable_ai_runtime_baseline ? 1 : 0
+  source = "../../modules/ai-runtime-baseline"
+
+  name_prefix         = local.resource_prefix
+  feature_enabled     = var.ai_feature_enabled
+  kill_switch_enabled = var.ai_kill_switch_enabled
+  allowed_model_arns  = var.ai_allowed_model_arns
+  log_retention_days  = var.ai_log_retention_days
+  tags                = local.tags
+}
+
+module "deployment_messaging" {
+  count  = var.enable_deployment_messaging ? 1 : 0
+  source = "../../modules/deployment-messaging"
+
+  name_prefix                      = local.resource_prefix
+  enable_alarms                    = var.deployment_queue_enable_alarms
+  alarm_visible_messages_threshold = var.deployment_queue_alarm_threshold
+  alarm_period_seconds             = var.deployment_queue_alarm_period_seconds
+  alarm_evaluation_periods         = var.deployment_queue_alarm_evaluation_periods
+  tags                             = local.tags
 }
 
 module "static_runtime" {

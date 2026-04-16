@@ -7,7 +7,6 @@ import (
 	"regexp"
 	"strings"
 
-	"labra-backend/internal/api/auth"
 	awsverify "labra-backend/internal/api/aws"
 	"labra-backend/internal/api/store"
 )
@@ -38,7 +37,7 @@ func UpsertAWSConnectionHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	userID, ok := resolveUserID(r)
+	userID, ok := readUserID(r)
 	if !ok {
 		writeJSONError(w, http.StatusUnauthorized, "missing auth principal or X-User-ID header")
 		return
@@ -132,7 +131,7 @@ func ListAWSConnectionsHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	userID, ok := resolveUserID(r)
+	userID, ok := readUserID(r)
 	if !ok {
 		writeJSONError(w, http.StatusUnauthorized, "missing auth principal or X-User-ID header")
 		return
@@ -147,13 +146,6 @@ func ListAWSConnectionsHandler(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{
 		"aws_connections": connections,
 	})
-}
-
-func resolveUserID(r *http.Request) (int64, bool) {
-	if principal, ok := auth.PrincipalFromContext(r.Context()); ok && principal.UserID > 0 {
-		return principal.UserID, true
-	}
-	return readUserID(r)
 }
 
 func normalizeAWSConnection(req upsertAWSConnectionRequest) (store.UpsertAWSConnectionInput, error) {

@@ -227,7 +227,15 @@ func mintTestJWT(t *testing.T, secret, issuer, audience string, extra jwt.MapCla
 
 func TestPostAuthSessionRejectsMissingToken(t *testing.T) {
 	db := setupSprint2TestDB(t)
-	defer db.Close()
+	prevStore := appStore
+	prevAuthValidator := authValidator
+	prevTokenIssuer := tokenIssuer
+	t.Cleanup(func() {
+		appStore = prevStore
+		authValidator = prevAuthValidator
+		tokenIssuer = prevTokenIssuer
+		_ = db.Close()
+	})
 	InitAppStore(db)
 	InitAuthRuntime(auth.HMACValidator{Secret: []byte("x")}, auth.TokenIssuer{Secret: []byte("x")})
 
@@ -241,7 +249,13 @@ func TestPostAuthSessionRejectsMissingToken(t *testing.T) {
 
 func TestAssumeRoleValidationRejectsAccountMismatch(t *testing.T) {
 	db := setupSprint2TestDB(t)
-	defer db.Close()
+	prevStore := appStore
+	prevAssumeRoleVerifier := assumeRoleVerifier
+	t.Cleanup(func() {
+		appStore = prevStore
+		assumeRoleVerifier = prevAssumeRoleVerifier
+		_ = db.Close()
+	})
 	InitAppStore(db)
 
 	ctx := auth.WithPrincipal(context.Background(), auth.Principal{UserID: 11, Sub: "sub-11", Roles: []string{"owner"}})

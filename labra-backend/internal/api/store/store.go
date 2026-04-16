@@ -335,6 +335,63 @@ func (s *Store) ListDeploymentLogs(ctx context.Context, deploymentID int64) ([]D
 	return out, rows.Err()
 }
 
+func (s *Store) CreateAIRequestLog(ctx context.Context, in CreateAIRequestLogInput) (AIRequestLog, error) {
+	row := s.db.QueryRowContext(ctx, `
+		INSERT INTO ai_request_logs (
+			user_id, deployment_id, prompt_version, provider, model, input_redacted, fallback_used, status, input_excerpt, output_excerpt, created_at
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, unixepoch())
+		RETURNING id, user_id, deployment_id, prompt_version, provider, model, input_redacted, fallback_used, status,
+			COALESCE(input_excerpt, ''), COALESCE(output_excerpt, ''), created_at
+	`, in.UserID, in.DeploymentID, strings.TrimSpace(in.PromptVersion), strings.TrimSpace(in.Provider), strings.TrimSpace(in.Model),
+		boolToInt(in.InputRedacted), boolToInt(in.FallbackUsed), strings.TrimSpace(in.Status), nullIfEmpty(in.InputExcerpt), nullIfEmpty(in.OutputExcerpt))
+
+	var out AIRequestLog
+	var inputRedactedInt int
+	var fallbackUsedInt int
+	if err := row.Scan(&out.ID, &out.UserID, &out.DeploymentID, &out.PromptVersion, &out.Provider, &out.Model, &inputRedactedInt, &fallbackUsedInt, &out.Status, &out.InputExcerpt, &out.OutputExcerpt, &out.CreatedAt); err != nil {
+		return AIRequestLog{}, err
+	}
+	out.InputRedacted = inputRedactedInt == 1
+	out.FallbackUsed = fallbackUsedInt == 1
+	return out, nil
+}
+
+func (s *Store) ListAIRequestLogsByUser(ctx context.Context, userID int64, limit int) ([]AIRequestLog, error) {
+	if limit <= 0 {
+		limit = 20
+	}
+	if limit > 200 {
+		limit = 200
+	}
+
+	rows, err := s.db.QueryContext(ctx, `
+		SELECT id, user_id, deployment_id, prompt_version, provider, model, input_redacted, fallback_used, status,
+			COALESCE(input_excerpt, ''), COALESCE(output_excerpt, ''), created_at
+		FROM ai_request_logs
+		WHERE user_id = ?
+		ORDER BY created_at DESC, id DESC
+		LIMIT ?
+	`, userID, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	out := make([]AIRequestLog, 0)
+	for rows.Next() {
+		var item AIRequestLog
+		var inputRedactedInt int
+		var fallbackUsedInt int
+		if err := rows.Scan(&item.ID, &item.UserID, &item.DeploymentID, &item.PromptVersion, &item.Provider, &item.Model, &inputRedactedInt, &fallbackUsedInt, &item.Status, &item.InputExcerpt, &item.OutputExcerpt, &item.CreatedAt); err != nil {
+			return nil, err
+		}
+		item.InputRedacted = inputRedactedInt == 1
+		item.FallbackUsed = fallbackUsedInt == 1
+		out = append(out, item)
+	}
+	return out, rows.Err()
+}
+
 func (s *Store) ClaimWebhookDelivery(ctx context.Context, appID int64, deliveryID, eventType, commitSHA string) (bool, error) {
 	_, err := s.db.ExecContext(ctx, `
 		INSERT INTO webhook_deliveries (app_id, delivery_id, event_type, commit_sha, received_at)

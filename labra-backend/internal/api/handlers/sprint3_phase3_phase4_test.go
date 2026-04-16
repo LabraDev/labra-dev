@@ -14,7 +14,11 @@ import (
 
 func TestSprint3Phase3Phase4Flow(t *testing.T) {
 	db := setupSprint3TestDB(t)
-	defer db.Close()
+	prevStore := appStore
+	t.Cleanup(func() {
+		appStore = prevStore
+		_ = db.Close()
+	})
 
 	InitAppStore(db)
 

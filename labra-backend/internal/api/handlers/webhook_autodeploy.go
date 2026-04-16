@@ -40,24 +40,17 @@ func enqueueWebhookDeployments(
 			return nil, fmt.Errorf("failed to load app for webhook deploy: %w", err)
 		}
 
-		deployment, err := appStore.CreateDeployment(r.Context(), store.CreateDeploymentInput{
-			AppID:         app.ID,
-			UserID:        app.UserID,
-			Status:        "queued",
+		deployment, err := queueDeployment(r.Context(), app, store.CreateDeploymentInput{
 			TriggerType:   "webhook",
 			CommitSHA:     commitSHA,
 			CommitMessage: commitMessage,
 			CommitAuthor:  commitAuthor,
 			Branch:        branch,
-			SiteURL:       app.SiteURL,
 			CorrelationID: fmt.Sprintf("webhook-%s-%d-%d", deliveryID, app.ID, time.Now().UnixNano()),
-		})
+		}, "deployment queued by webhook trigger")
 		if err != nil {
 			return nil, fmt.Errorf("failed to create webhook deployment: %w", err)
 		}
-
-		_ = appStore.CreateDeploymentLog(r.Context(), deployment.ID, "info", "deployment queued by webhook trigger")
-		triggerDeployment(deployment.ID, app)
 
 		triggered = append(triggered, map[string]any{
 			"app_id":        app.ID,

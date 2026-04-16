@@ -1,6 +1,6 @@
 <script lang="ts">
 	import type { App, Deployment } from '$lib/api';
-	import { apiGET, prettyDate, shortSHA } from '$lib/api';
+	import { apiGET, apiPATCH, apiPOST, prettyDate, shortSHA } from '$lib/api';
 	import { onMount } from 'svelte';
 
 	type HistoryResponse = {
@@ -34,6 +34,9 @@
 	let userID = '1';
 	let loading = false;
 	let error = '';
+	let actionError = '';
+	let actionMessage = '';
+	let actionBusy = false;
 	let app: App | null = null;
 	let history: HistoryResponse | null = null;
 	let configHistory: ConfigHistoryResponse | null = null;
@@ -60,6 +63,44 @@
 		}
 	}
 
+	async function deployNow() {
+		if (!app) return;
+		actionBusy = true;
+		actionError = '';
+		actionMessage = '';
+		try {
+			const res = await apiPOST<{ deployment: { id: number } }>(`/v1/apps/${app.id}/deploy`, {}, undefined, userID);
+			actionMessage = `Deployment #${res.deployment?.id ?? '?'} queued`;
+			await loadPage();
+		} catch (err) {
+			actionError = err instanceof Error ? err.message : 'failed to trigger deployment';
+		} finally {
+			actionBusy = false;
+		}
+	}
+
+	async function toggleAutoDeploy() {
+		if (!app) return;
+		actionBusy = true;
+		actionError = '';
+		actionMessage = '';
+		try {
+			const updated = await apiPATCH<App>(
+				`/v1/apps/${app.id}`,
+				{ auto_deploy_enabled: !app.auto_deploy_enabled },
+				undefined,
+				userID
+			);
+			app = updated;
+			actionMessage = `Auto-deploy ${updated.auto_deploy_enabled ? 'enabled' : 'disabled'}`;
+			await loadPage();
+		} catch (err) {
+			actionError = err instanceof Error ? err.message : 'failed to update app';
+		} finally {
+			actionBusy = false;
+		}
+	}
+
 	onMount(loadPage);
 </script>
 
@@ -74,6 +115,10 @@
 				User ID
 				<input bind:value={userID} />
 			</label>
+			<button on:click={deployNow} disabled={actionBusy || loading}>Deploy Now</button>
+			<button on:click={toggleAutoDeploy} disabled={actionBusy || loading}>
+				{app?.auto_deploy_enabled ? 'Disable Auto-Deploy' : 'Enable Auto-Deploy'}
+			</button>
 			<button on:click={loadPage}>Refresh</button>
 		</div>
 	</div>
@@ -85,11 +130,18 @@
 	{:else if !app || !history}
 		<p class="muted">No app data.</p>
 	{:else}
+		{#if actionError}
+			<p class="error">{actionError}</p>
+		{:else if actionMessage}
+			<p class="ok">{actionMessage}</p>
+		{/if}
+
 		<div class="summary-grid">
 			<article>
 				<h2>{app.name}</h2>
 				<p><strong>Repo:</strong> {app.repo_full_name}</p>
 				<p><strong>Branch:</strong> {app.branch}</p>
+				<p><strong>Auto-Deploy:</strong> {app.auto_deploy_enabled ? 'enabled' : 'disabled'}</p>
 				<p><strong>Current Site URL:</strong> {latest?.site_url || app.site_url || 'n/a'}</p>
 			</article>
 			<article>
@@ -169,5 +221,6 @@
 	th { background: #282b45; }
 	a { color: #b0bfff; }
 	.error { color: #ff9ca8; }
+	.ok { color: #9ce4c5; }
 	.muted { opacity: 0.75; }
 </style>

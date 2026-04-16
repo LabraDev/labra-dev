@@ -112,7 +112,7 @@ func GetProfileHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	userID, ok := resolveUserID(r)
+	userID, ok := readUserID(r)
 	if !ok {
 		writeJSONError(w, http.StatusUnauthorized, "missing auth principal")
 		return

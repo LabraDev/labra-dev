@@ -9,6 +9,10 @@ data "aws_iam_policy_document" "ecs_task_assume_role" {
   }
 }
 
+locals {
+  github_oidc_provider_arn_effective = var.create_github_oidc_provider ? aws_iam_openid_connect_provider.github_actions[0].arn : var.github_oidc_provider_arn
+}
+
 resource "aws_iam_role" "backend_service" {
   name               = "${var.name_prefix}-backend-service-role"
   assume_role_policy = data.aws_iam_policy_document.ecs_task_assume_role.json
@@ -72,6 +76,18 @@ resource "aws_iam_role_policy_attachment" "deploy_runner_policy" {
   policy_arn = aws_iam_policy.deploy_runner_policy.arn
 }
 
+resource "aws_iam_openid_connect_provider" "github_actions" {
+  count = var.create_github_oidc_provider ? 1 : 0
+
+  url             = "https://token.actions.githubusercontent.com"
+  client_id_list  = var.github_oidc_client_ids
+  thumbprint_list = var.github_oidc_thumbprints
+
+  tags = merge(var.tags, {
+    Component = "github-oidc-provider"
+  })
+}
+
 data "aws_iam_policy_document" "github_actions_assume_role" {
   count = var.enable_github_oidc_role ? 1 : 0
 
@@ -80,7 +96,7 @@ data "aws_iam_policy_document" "github_actions_assume_role" {
 
     principals {
       type        = "Federated"
-      identifiers = [var.github_oidc_provider_arn]
+      identifiers = [local.github_oidc_provider_arn_effective]
     }
 
     actions = ["sts:AssumeRoleWithWebIdentity"]
