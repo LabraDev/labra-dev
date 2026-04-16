@@ -105,9 +105,11 @@ see [AWS_TERRAFORM_FIRST_PLAN.md](AWS_TERRAFORM_FIRST_PLAN.md).
 Customer onboarding assets:
 
 - `labra-infra/customer-onboarding/customer-assume-role.cfn.yaml`
-- `labra-infra/customer-onboarding/customer-assume-role.tf`
 
-CloudFormation option:
+Terraform remains the platform IaC model, while customer onboarding is
+intentionally CloudFormation-only for the simplest one-click role setup.
+
+CloudFormation flow:
 
 ```bash
 aws cloudformation deploy \
@@ -123,18 +125,6 @@ aws cloudformation describe-stacks \
   --stack-name labra-customer-assume-role \
   --query "Stacks[0].Outputs[?OutputKey=='CustomerRoleArn'].OutputValue" \
   --output text
-```
-
-Terraform option:
-
-```bash
-cd labra-infra/customer-onboarding
-terraform init -backend=false
-terraform apply \
-  -var "platform_principal_arn=<LABRA_PLATFORM_ROLE_ARN>" \
-  -var "external_id=<LABRA_EXTERNAL_ID>" \
-  -var "role_name=LabraCustomerDeployRole"
-terraform output -raw customer_role_arn
 ```
 
 ## Phase 4 MVP Runbook (Merged)

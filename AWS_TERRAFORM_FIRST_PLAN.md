@@ -66,13 +66,12 @@ This document tracks what is managed in Terraform versus what is still manual/ex
 ## Customer one-click onboarding assets
 - CloudFormation template:
   `labra-infra/customer-onboarding/customer-assume-role.cfn.yaml`
-- Terraform single-file snippet:
-  `labra-infra/customer-onboarding/customer-assume-role.tf`
 - Usage guide:
   `README.md#customer-onboarding-assumerole-one-click`
 
-Both assets create the customer-side IAM role and trust policy with `sts:ExternalId`
-protection, so customers do not need to configure trust manually in the AWS Console.
+The template creates the customer-side IAM role and trust policy with
+`sts:ExternalId` protection, so customers do not need to configure trust manually
+in the AWS Console.
 
 ## Recommended `terraform.tfvars` rollout
 
@@ -142,7 +141,7 @@ protection, so customers do not need to configure trust manually in the AWS Cons
   `terraform -chdir=labra-infra/env/dev output -raw static_distribution_domain_name`
 
 6. Onboard each customer account with one-click role creation:
-- Use CloudFormation one-command deploy or Terraform single-file apply from:
+- Use CloudFormation one-command deploy from:
   `README.md#customer-onboarding-assumerole-one-click`
 - Provide customers:
   platform role ARN from step 5, plus a generated external ID.
