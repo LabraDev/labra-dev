@@ -142,7 +142,263 @@ variable "enable_control_plane_cluster" {
   default = true
 }
 
+variable "enable_ecr_baseline" {
+  type    = bool
+  default = true
+}
+
+variable "ecr_repository_names" {
+  type = list(string)
+  default = [
+    "control-api",
+    "deploy-orchestrator",
+    "webhook-ingestor",
+    "deploy-runner",
+    "ai-runtime"
+  ]
+}
+
+variable "ecr_scan_on_push" {
+  type    = bool
+  default = true
+}
+
+variable "ecr_mutable_tags" {
+  type    = bool
+  default = false
+}
+
+variable "ecr_max_images_per_repo" {
+  type    = number
+  default = 200
+}
+
+variable "enable_control_plane_services_baseline" {
+  type    = bool
+  default = false
+}
+
+variable "control_api_container_image" {
+  type    = string
+  default = "public.ecr.aws/nginx/nginx:stable"
+}
+
+variable "deploy_orchestrator_container_image" {
+  type    = string
+  default = "public.ecr.aws/docker/library/busybox:stable"
+}
+
+variable "webhook_ingestor_container_image" {
+  type    = string
+  default = "public.ecr.aws/docker/library/busybox:stable"
+}
+
+variable "control_api_container_port" {
+  type    = number
+  default = 80
+}
+
+variable "control_api_health_check_path" {
+  type    = string
+  default = "/health"
+}
+
+variable "control_api_desired_count" {
+  type    = number
+  default = 1
+}
+
+variable "control_plane_worker_desired_count" {
+  type    = number
+  default = 1
+}
+
+variable "control_plane_task_cpu" {
+  type    = number
+  default = 256
+}
+
+variable "control_plane_task_memory" {
+  type    = number
+  default = 512
+}
+
+variable "control_plane_assign_public_ip" {
+  type    = bool
+  default = false
+}
+
+variable "control_plane_create_execution_role" {
+  type    = bool
+  default = true
+}
+
+variable "control_plane_execution_role_arn" {
+  type    = string
+  default = null
+}
+
+variable "enable_metadata_host_baseline" {
+  type    = bool
+  default = false
+}
+
+variable "metadata_host_instance_type" {
+  type    = string
+  default = "t3.micro"
+}
+
+variable "metadata_host_root_volume_size_gib" {
+  type    = number
+  default = 20
+}
+
+variable "metadata_host_key_name" {
+  type    = string
+  default = null
+}
+
+variable "metadata_host_create_instance_profile" {
+  type    = bool
+  default = true
+}
+
+variable "metadata_host_ssm_managed" {
+  type    = bool
+  default = true
+}
+
+variable "metadata_host_ami_ssm_parameter" {
+  type    = string
+  default = "/aws/service/ami-amazon-linux-latest/al2023-ami-kernel-default-x86_64"
+}
+
+variable "metadata_host_bootstrap_sqlite" {
+  type    = bool
+  default = true
+}
+
+variable "enable_cloudtrail_baseline" {
+  type    = bool
+  default = false
+}
+
+variable "cloudtrail_name" {
+  type    = string
+  default = null
+}
+
+variable "cloudtrail_is_multi_region_trail" {
+  type    = bool
+  default = true
+}
+
+variable "cloudtrail_include_global_service_events" {
+  type    = bool
+  default = true
+}
+
+variable "cloudtrail_enable_log_file_validation" {
+  type    = bool
+  default = true
+}
+
+variable "cloudtrail_kms_key_id" {
+  type    = string
+  default = null
+}
+
+variable "cloudtrail_force_destroy" {
+  type    = bool
+  default = false
+}
+
+variable "enable_waf_regional_baseline" {
+  type    = bool
+  default = false
+}
+
+variable "enable_edge_dns_baseline" {
+  type    = bool
+  default = false
+}
+
+variable "edge_dns_hosted_zone_id" {
+  type    = string
+  default = null
+}
+
+variable "api_domain_name" {
+  type    = string
+  default = null
+}
+
+variable "edge_dns_create_api_certificate" {
+  type    = bool
+  default = false
+}
+
+variable "frontend_domain_name" {
+  type    = string
+  default = null
+}
+
+variable "enable_ai_runtime_baseline" {
+  type    = bool
+  default = true
+}
+
+variable "ai_feature_enabled" {
+  type    = bool
+  default = true
+}
+
+variable "ai_kill_switch_enabled" {
+  type    = bool
+  default = false
+}
+
+variable "ai_allowed_model_arns" {
+  type    = list(string)
+  default = ["*"]
+}
+
+variable "ai_log_retention_days" {
+  type    = number
+  default = 30
+}
+
+variable "enable_deployment_messaging" {
+  type    = bool
+  default = true
+}
+
+variable "deployment_queue_enable_alarms" {
+  type    = bool
+  default = true
+}
+
+variable "deployment_queue_alarm_threshold" {
+  type    = number
+  default = 10
+}
+
+variable "deployment_queue_alarm_period_seconds" {
+  type    = number
+  default = 300
+}
+
+variable "deployment_queue_alarm_evaluation_periods" {
+  type    = number
+  default = 1
+}
+
 variable "iam_enable_github_oidc_role" {
+  type    = bool
+  default = false
+}
+
+variable "iam_create_github_oidc_provider" {
   type    = bool
   default = false
 }
@@ -150,6 +406,18 @@ variable "iam_enable_github_oidc_role" {
 variable "iam_github_oidc_provider_arn" {
   type    = string
   default = null
+}
+
+variable "iam_github_oidc_client_ids" {
+  type    = list(string)
+  default = ["sts.amazonaws.com"]
+}
+
+variable "iam_github_oidc_thumbprints" {
+  type = list(string)
+  default = [
+    "6938fd4d98bab03faadb97b34396831e3780aea1"
+  ]
 }
 
 variable "iam_github_repository" {

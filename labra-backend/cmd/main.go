@@ -54,6 +54,14 @@ func main() {
 	handlers.InitWebhook(cfg.GitHubWebhookSecret)
 	handlers.InitReadiness(db.PingContext)
 	handlers.InitAssumeRoleVerifier(awsverify.LocalAssumeRoleVerifier{})
+	handlers.InitAIRuntime(handlers.AIRuntimeConfig{
+		FeatureEnabled:  cfg.AIFeatureEnabled,
+		KillSwitch:      cfg.AIKillSwitchEnabled,
+		PromptVersion:   cfg.AIPromptVersion,
+		ProviderModel:   cfg.AIProviderModel,
+		ProviderTimeout: time.Duration(cfg.AIProviderTimeoutMS) * time.Millisecond,
+		ProviderRetries: cfg.AIProviderRetries,
+	})
 
 	validator := auth.HMACValidator{
 		Issuer:   strings.TrimSpace(cfg.JWTIssuer),
@@ -79,6 +87,7 @@ func main() {
 	routes.AWSConnections(s)
 	routes.Apps(s)
 	routes.Deploy(s)
+	routes.AIRoutes(s)
 	routes.SystemRoutes(s)
 	routes.Webhooks(s)
 

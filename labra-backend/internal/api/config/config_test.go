@@ -54,3 +54,37 @@ func TestLoadRejectsInvalidEnvironment(t *testing.T) {
 		t.Fatalf("expected invalid APP_ENV error")
 	}
 }
+
+func TestLoadAISettingsDefaultsAndValidation(t *testing.T) {
+	cfg, err := Load(func(key string) string {
+		vals := map[string]string{
+			"APP_ENV": "dev",
+			"DB_URL":  "file:test.db",
+		}
+		return vals[key]
+	})
+	if err != nil {
+		t.Fatalf("expected defaults to load, got error: %v", err)
+	}
+	if !cfg.AIFeatureEnabled {
+		t.Fatalf("expected AI feature enabled by default")
+	}
+	if cfg.AIKillSwitchEnabled {
+		t.Fatalf("expected AI kill switch disabled by default")
+	}
+	if cfg.AIPromptVersion == "" {
+		t.Fatalf("expected non-empty AI prompt version default")
+	}
+
+	_, err = Load(func(key string) string {
+		vals := map[string]string{
+			"APP_ENV":            "dev",
+			"DB_URL":             "file:test.db",
+			"AI_FEATURE_ENABLED": "not-a-bool",
+		}
+		return vals[key]
+	})
+	if err == nil {
+		t.Fatalf("expected error for invalid AI_FEATURE_ENABLED")
+	}
+}

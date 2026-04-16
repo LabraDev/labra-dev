@@ -1,37 +1,26 @@
 package handlers
 
 import (
-	"errors"
 	"net/http"
-
-	"labra-backend/internal/api/store"
 )
 
 func GetAppDeploysHandler(w http.ResponseWriter, r *http.Request) {
-	if appStore == nil {
-		writeJSONError(w, http.StatusInternalServerError, "store not initialized")
+	if !ensureAppStore(w) {
 		return
 	}
 
-	userID, ok := readUserID(r)
+	userID, ok := requireUserID(w, r)
 	if !ok {
-		writeJSONError(w, http.StatusUnauthorized, "missing user id: pass X-User-ID header")
 		return
 	}
 
-	appID, err := readIDFromPathOrQuery(r, "apps")
-	if err != nil {
-		writeJSONError(w, http.StatusBadRequest, err.Error())
+	appID, ok := readAppIDFromRequest(w, r)
+	if !ok {
 		return
 	}
 
-	app, err := appStore.GetAppByIDForUser(r.Context(), appID, userID)
-	if err != nil {
-		if errors.Is(err, store.ErrNotFound) {
-			writeJSONError(w, http.StatusNotFound, "app not found")
-			return
-		}
-		writeJSONError(w, http.StatusInternalServerError, "failed to load app")
+	app, ok := loadAppForUser(w, r, appID, userID)
+	if !ok {
 		return
 	}
 

@@ -60,6 +60,21 @@ type DeploymentLog struct {
 	CreatedAt    int64  `json:"created_at"`
 }
 
+type AIRequestLog struct {
+	ID            int64  `json:"id"`
+	UserID        int64  `json:"user_id"`
+	DeploymentID  int64  `json:"deployment_id"`
+	PromptVersion string `json:"prompt_version"`
+	Provider      string `json:"provider"`
+	Model         string `json:"model"`
+	InputRedacted bool   `json:"input_redacted"`
+	FallbackUsed  bool   `json:"fallback_used"`
+	Status        string `json:"status"`
+	InputExcerpt  string `json:"input_excerpt,omitempty"`
+	OutputExcerpt string `json:"output_excerpt,omitempty"`
+	CreatedAt     int64  `json:"created_at"`
+}
+
 type AWSConnection struct {
 	ID              int64  `json:"id"`
 	UserID          int64  `json:"user_id"`
@@ -188,4 +203,17 @@ type CreateAppConfigVersionInput struct {
 	UserID     int64
 	Source     string
 	ConfigJSON string
+}
+
+type CreateAIRequestLogInput struct {
+	UserID        int64
+	DeploymentID  int64
+	PromptVersion string
+	Provider      string
+	Model         string
+	InputRedacted bool
+	FallbackUsed  bool
+	Status        string
+	InputExcerpt  string
+	OutputExcerpt string
 }

@@ -10,9 +10,12 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 )
 
 var githubWebhookSecret string
+var webhookMaxSkewSeconds int64 = 5 * 60
+var webhookNowUnix = func() int64 { return time.Now().Unix() }
 
 type githubPushEvent struct {
 	Ref        string `json:"ref"`
@@ -63,6 +66,10 @@ func GitHubWebhookHandler(w http.ResponseWriter, r *http.Request) {
 		writeJSONError(w, http.StatusUnauthorized, "invalid webhook signature")
 		return
 	}
+	if err := validateWebhookFreshness(r); err != nil {
+		writeWebhookError(w, err)
+		return
+	}
 
 	eventType := strings.ToLower(strings.TrimSpace(r.Header.Get("X-GitHub-Event")))
 	deliveryID := strings.TrimSpace(r.Header.Get("X-GitHub-Delivery"))
@@ -103,22 +110,44 @@ func GitHubWebhookHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeJSON(w, http.StatusAccepted, map[string]any{
-		"accepted":       true,
-		"ignored":        resolution.Ignored || len(dedupedApps) == 0,
-		"delivery_id":    deliveryID,
-		"event_type":     eventType,
-		"repo_full_name": resolution.RepoFullName,
-		"branch":         resolution.Branch,
-		"commit_sha":     strings.TrimSpace(payload.After),
-		"commit_message": strings.TrimSpace(payload.HeadCommit.Message),
-		"commit_author":  strings.TrimSpace(payload.HeadCommit.Author.Name),
-		"matched_apps":   resolution.MatchedApps,
-		"eligible_apps":  dedupedApps,
-		"duplicate_count": duplicateCount,
-		"triggered_count": len(triggeredDeployments),
+		"accepted":              true,
+		"ignored":               resolution.Ignored || len(dedupedApps) == 0,
+		"delivery_id":           deliveryID,
+		"event_type":            eventType,
+		"repo_full_name":        resolution.RepoFullName,
+		"branch":                resolution.Branch,
+		"commit_sha":            strings.TrimSpace(payload.After),
+		"commit_message":        strings.TrimSpace(payload.HeadCommit.Message),
+		"commit_author":         strings.TrimSpace(payload.HeadCommit.Author.Name),
+		"matched_apps":          resolution.MatchedApps,
+		"eligible_apps":         dedupedApps,
+		"duplicate_count":       duplicateCount,
+		"triggered_count":       len(triggeredDeployments),
 		"triggered_deployments": triggeredDeployments,
-		"reason":         resolution.Reason,
+		"reason":                resolution.Reason,
 	})
+}
+
+func validateWebhookFreshness(r *http.Request) error {
+	raw := strings.TrimSpace(r.Header.Get("X-Labra-Webhook-Timestamp"))
+	if raw == "" {
+		return nil
+	}
+
+	ts, err := strconv.ParseInt(raw, 10, 64)
+	if err != nil || ts <= 0 {
+		return errWebhook("invalid webhook timestamp header")
+	}
+
+	now := webhookNowUnix()
+	delta := now - ts
+	if delta < 0 {
+		delta = -delta
+	}
+	if delta > webhookMaxSkewSeconds {
+		return errWebhook("webhook timestamp outside allowed replay window")
+	}
+	return nil
 }
 
 func isValidGitHubSignature(secret string, body []byte, signature string) bool {

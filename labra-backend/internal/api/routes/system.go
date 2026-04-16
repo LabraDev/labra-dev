@@ -8,4 +8,5 @@ import (
 
 func SystemRoutes(s *fuego.Server) {
 	fuego.GetStd(s, "/v1/system/services", withAuth(handlers.GetSystemServicesHandler))
+	fuego.GetStd(s, "/v1/system/readiness-checklist", withAuth(handlers.GetReadinessChecklistHandler))
 }

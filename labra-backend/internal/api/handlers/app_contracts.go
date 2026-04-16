@@ -40,10 +40,7 @@ func recordAppConfigVersion(ctx context.Context, app store.App, source string) e
 func ensureAppInfraOutput(ctx context.Context, app store.App) error {
 	bucketName := buildBucketName(app)
 	distributionID := fmt.Sprintf("pending-dist-%d", app.ID)
-	siteURL := strings.TrimSpace(app.SiteURL)
-	if siteURL == "" {
-		siteURL = fmt.Sprintf("https://%s.preview.labra.local", slugify(app.Name))
-	}
+	siteURL := appSiteURLOrDefault(app)
 
 	_, err := appStore.UpsertAppInfraOutput(ctx, store.UpsertAppInfraOutputInput{
 		AppID:          app.ID,

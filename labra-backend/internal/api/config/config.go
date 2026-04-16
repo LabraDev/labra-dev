@@ -26,6 +26,12 @@ type Config struct {
 	JWTIssuer           string
 	JWTAudience         string
 	JWTSigningSecret    string
+	AIFeatureEnabled    bool
+	AIKillSwitchEnabled bool
+	AIPromptVersion     string
+	AIProviderModel     string
+	AIProviderTimeoutMS int
+	AIProviderRetries   int
 	LogLevel            slog.Level
 }
 
@@ -80,6 +86,41 @@ func Load(getenv func(string) string) (Config, error) {
 		return Config{}, fmt.Errorf("JWT_ISSUER and JWT_AUDIENCE are required when JWT_SIGNING_SECRET is set")
 	}
 
+	aiFeatureEnabled, err := parseBoolWithDefault(normalize(getenv("AI_FEATURE_ENABLED")), true)
+	if err != nil {
+		return Config{}, fmt.Errorf("AI_FEATURE_ENABLED must be true or false")
+	}
+	aiKillSwitchEnabled, err := parseBoolWithDefault(normalize(getenv("AI_KILL_SWITCH_ENABLED")), false)
+	if err != nil {
+		return Config{}, fmt.Errorf("AI_KILL_SWITCH_ENABLED must be true or false")
+	}
+	aiPromptVersion := normalize(getenv("AI_PROMPT_VERSION"))
+	if aiPromptVersion == "" {
+		aiPromptVersion = "phase7-v1"
+	}
+	aiProviderModel := normalize(getenv("AI_PROVIDER_MODEL"))
+	if aiProviderModel == "" {
+		aiProviderModel = "mock-ops-v1"
+	}
+
+	aiProviderTimeoutMS := 1800
+	if raw := normalize(getenv("AI_PROVIDER_TIMEOUT_MS")); raw != "" {
+		parsed, err := strconv.Atoi(raw)
+		if err != nil || parsed <= 0 {
+			return Config{}, fmt.Errorf("AI_PROVIDER_TIMEOUT_MS must be a positive integer")
+		}
+		aiProviderTimeoutMS = parsed
+	}
+
+	aiProviderRetries := 2
+	if raw := normalize(getenv("AI_PROVIDER_RETRIES")); raw != "" {
+		parsed, err := strconv.Atoi(raw)
+		if err != nil || parsed < 0 || parsed > 10 {
+			return Config{}, fmt.Errorf("AI_PROVIDER_RETRIES must be between 0 and 10")
+		}
+		aiProviderRetries = parsed
+	}
+
 	return Config{
 		Environment:         environment,
 		Host:                host,
@@ -91,6 +132,12 @@ func Load(getenv func(string) string) (Config, error) {
 		JWTIssuer:           jwtIssuer,
 		JWTAudience:         jwtAudience,
 		JWTSigningSecret:    jwtSecret,
+		AIFeatureEnabled:    aiFeatureEnabled,
+		AIKillSwitchEnabled: aiKillSwitchEnabled,
+		AIPromptVersion:     aiPromptVersion,
+		AIProviderModel:     aiProviderModel,
+		AIProviderTimeoutMS: aiProviderTimeoutMS,
+		AIProviderRetries:   aiProviderRetries,
 		LogLevel:            logLevel,
 	}, nil
 }
@@ -112,4 +159,15 @@ func parseLogLevel(raw string) (slog.Level, error) {
 	default:
 		return slog.LevelInfo, fmt.Errorf("LOG_LEVEL must be one of debug/info/warn/error")
 	}
+}
+
+func parseBoolWithDefault(raw string, def bool) (bool, error) {
+	if strings.TrimSpace(raw) == "" {
+		return def, nil
+	}
+	v, err := strconv.ParseBool(strings.ToLower(strings.TrimSpace(raw)))
+	if err != nil {
+		return false, err
+	}
+	return v, nil
 }

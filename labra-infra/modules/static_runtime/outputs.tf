@@ -18,6 +18,10 @@ output "distribution_domain_name" {
   value = aws_cloudfront_distribution.site.domain_name
 }
 
+output "distribution_hosted_zone_id" {
+  value = aws_cloudfront_distribution.site.hosted_zone_id
+}
+
 output "site_url" {
   value = "https://${aws_cloudfront_distribution.site.domain_name}"
 }
